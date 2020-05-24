@@ -1,6 +1,6 @@
 {
   "name": "web3w",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/web3w.cjs.js",
   "module": "dist/web3w.esm.js",
   "browser": "dist/web3w.umd.js",
@@ -10,6 +10,9 @@
     "@ethersproject/providers": "^5.0.0-beta.164"
   },
   "devDependencies": {
+    "@ethersproject/bignumber": "^5.0.0-beta.138",
+    "@ethersproject/contracts": "^5.0.0-beta.151",
+    "@ethersproject/providers": "^5.0.0-beta.164",
     "@rollup/plugin-json": "^4.0.3",
     "rollup": "^1.20.0",
     "rollup-plugin-commonjs": "^10.0.0",
