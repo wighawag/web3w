@@ -838,7 +838,8 @@
         if (type && type !== "") {
           select(type);
         }
-      } else if (config.builtin.autoProbe) {
+      }
+      if (config.builtin.autoProbe) {
         probeBuiltin(config.builtin);
       }
     }
