@@ -1,0 +1,13 @@
+@startuml
+Idle: state=Idle
+Idle: probing?
+Idle: error?
+Idle: PROBE
+
+None: state=None
+Ready: state=Ready
+
+[*] --> Idle
+Idle -> None
+Idle -> Ready
+@enduml

@@ -1,0 +1,29 @@
+@startuml
+Idle: state=Idle
+Idle: options
+Idle: selected?
+Idle: loading?
+Idle: error?
+Idle: SELECT
+Locked: state=Locked
+Locked: options
+Locked: selected
+Locked: error?
+Locked: unlocking?
+Locked: UNLOCK
+Ready: state=Ready
+Ready: options
+Ready: selected
+Ready: address
+Ready: error?
+Ready: pendingUserConfirmation?
+Ready: EXECUTE
+Ready: SIGN
+
+
+[*] --> Idle
+Idle -> Locked
+Idle -> Ready
+Locked -> Ready
+Ready -> Locked
+@enduml
