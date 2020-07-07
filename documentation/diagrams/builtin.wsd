@@ -7,7 +7,7 @@ Idle: probe()
 
 Ready: state=Ready
 Ready: available
-Ready: vendor
+Ready: vendor?
 
 [*] --> Idle
 Idle -> Ready

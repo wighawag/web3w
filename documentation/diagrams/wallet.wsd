@@ -8,10 +8,10 @@ Idle: ................................
 Idle: acknowledgeError()
 Idle: connect(<type>)
 Locked: state=Locked
+Locked: unlocking
 Locked: options
 Locked: selected
 Locked: error?
-Locked: unlocking?
 Locked: ................................
 Locked: acknowledgeError()
 Locked: unlock()
@@ -26,7 +26,7 @@ Ready: ................................
 Ready: acknowledgeError()
 Ready: logout()
 Ready: .contracts...
-Ready: .provider...
+Ready: .provider... // TODO
 
 
 [*] --> Idle

@@ -684,7 +684,7 @@
     }
     set(chainStore, {
       state: 'Ready',
-      loading: false,
+      loading: undefined,
       chainId,
       addresses,
       contracts: {
@@ -725,7 +725,6 @@
       address: undefined,
       loading: true,
       selected: type,
-      previousType: $wallet.selected,
       state: 'Idle',
       error: undefined,
     });
@@ -786,14 +785,14 @@
       set(walletStore, {
         address,
         state: 'Ready',
-        loading: false,
+        loading: undefined,
       });
       await setupChain(address);
     } else {
       set(walletStore, {
         address: undefined,
         state: 'Locked',
-        loading: false,
+        loading: undefined,
       });
     }
   }
@@ -820,7 +819,7 @@
             state: 'Ready',
             vendor: getVendor(ethereum),
             available: true,
-            loading: false,
+            loading: undefined,
           });
           // if (config.metamaskReloadFix && $wallet.builtin.vendor === "Metamask") {
           //   // see https://github.com/MetaMask/metamask-extension/issues/7221
@@ -834,7 +833,7 @@
             state: 'Ready',
             vendor: undefined,
             available: false,
-            loading: false,
+            loading: undefined,
           });
         }
       } catch (e) {
@@ -863,7 +862,7 @@
 
   async function connect(type) {
     await select(type);
-    if ($wallet.status === 'Locked') {
+    if ($wallet.state === 'Locked') {
       return unlock();
     }
     return true;

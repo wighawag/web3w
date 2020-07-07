@@ -446,7 +446,7 @@ function probeBuiltin(config = {}) {
 
 async function connect(type) {
   await select(type);
-  if ($wallet.status === 'Locked') {
+  if ($wallet.state === 'Locked') {
     return unlock();
   }
   return true;
