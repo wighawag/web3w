@@ -701,7 +701,10 @@ async function setupChain(address) {
 }
 
 async function select(type, config) {
-  if ($wallet.selected) {
+  if (
+    $wallet.selected &&
+    ($wallet.state === 'Ready' || $wallet.state === 'Locked')
+  ) {
     await logout();
   }
 
@@ -732,7 +735,8 @@ async function select(type, config) {
   _ethersProvider = null;
   _web3Provider = null;
   if (type === 'builtin') {
-    await probeBuiltin();
+    _currentModule = undefined;
+    await probeBuiltin(); // TODO try catch ?
     _ethersProvider = _builtinEthersProvider;
     _web3Provider = _builtinWeb3Provider;
   } else {
@@ -750,18 +754,35 @@ async function select(type, config) {
       type = module.id;
     }
 
-    const {chainId, web3Provider} = await module.setup(config); // TODO pass config in select to choose network
-    _web3Provider = web3Provider;
-    _ethersProvider = proxyWeb3Provider(
-      new Web3Provider(_web3Provider),
-      _observers
-    );
-    _currentModule = module;
+    try {
+      const {chainId, web3Provider} = await module.setup(config); // TODO pass config in select to choose network
+      _web3Provider = web3Provider;
+      _ethersProvider = proxyWeb3Provider(
+        new Web3Provider(_web3Provider),
+        _observers
+      );
+      _currentModule = module;
+    } catch (e) {
+      if (e.message === 'USER_CANCELED') {
+        set(walletStore, {loading: false, selected: undefined});
+      } else {
+        set(walletStore, {
+          error: {message: e.message},
+          selected: undefined,
+          loading: false,
+        });
+      }
+      throw e;
+    }
   }
 
   if (!_ethersProvider) {
     const message = `no provider found for wallet type ${type}`;
-    set(walletStore, {error: {message, code: 1}}); // TODO code
+    set(walletStore, {
+      error: {message, code: 1},
+      selected: undefined,
+      loading: false,
+    }); // TODO code
     throw new Error(message);
   }
 
@@ -776,7 +797,7 @@ async function select(type, config) {
       accounts = await timeout(20000, _ethersProvider.listAccounts());
     }
   } catch (e) {
-    set(walletStore, {error: e});
+    set(walletStore, {error: e, selected: undefined, loading: false});
     throw e;
   }
   console.log({accounts});
