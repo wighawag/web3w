@@ -700,7 +700,11 @@ async function setupChain(address) {
   }); // TODO None ?
 }
 
-async function select(type) {
+async function select(type, config) {
+  if ($wallet.selected) {
+    await logout();
+  }
+
   if (!type) {
     if (_options.length === 0) {
       type = 'builtin';
@@ -746,7 +750,7 @@ async function select(type) {
       type = module.id;
     }
 
-    const {chainId, web3Provider} = await module.setup(module.config); // TODO pass config in select to choose network
+    const {chainId, web3Provider} = await module.setup(config); // TODO pass config in select to choose network
     _web3Provider = web3Provider;
     _ethersProvider = proxyWeb3Provider(
       new Web3Provider(_web3Provider),
@@ -959,7 +963,15 @@ var index = (config) => {
   _options = config.options || [];
   set(walletStore, {
     state: 'Idle',
-    options: _options.map((m) => m.id || m),
+    options: _options.map((m) => {
+      if (typeof m === 'object') {
+        if (!m.id) {
+          throw new Error('options need to be string or have an id', m);
+        }
+        return m.id;
+      }
+      return m;
+    }),
   });
   set(builtinStore, {
     state: 'Idle',
