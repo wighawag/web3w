@@ -1,24 +1,32 @@
 @startuml
 Idle: state=Idle
+Idle: loading
 Idle: options
 Idle: selected?
-Idle: loading?
 Idle: error?
-Idle: SELECT
+Idle: ................................
+Idle: acknowledgeError()
+Idle: connect(<type>)
 Locked: state=Locked
 Locked: options
 Locked: selected
 Locked: error?
 Locked: unlocking?
-Locked: UNLOCK
+Locked: ................................
+Locked: acknowledgeError()
+Locked: unlock()
+Locked: logout()
 Ready: state=Ready
 Ready: options
 Ready: selected
 Ready: address
 Ready: error?
 Ready: pendingUserConfirmation?
-Ready: EXECUTE
-Ready: SIGN
+Ready: ................................
+Ready: acknowledgeError()
+Ready: logout()
+Ready: .contracts...
+Ready: .provider...
 
 
 [*] --> Idle

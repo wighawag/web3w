@@ -1,13 +1,15 @@
 @startuml
 Idle: state=Idle
-Idle: probing?
+Idle: loading
 Idle: error?
-Idle: PROBE
 
-None: state=None
 Ready: state=Ready
+Ready: contracts
+Ready: chainId
+Ready: notSupported
+Ready: addresses
+
 
 [*] --> Idle
-Idle -> None
 Idle -> Ready
 @enduml
