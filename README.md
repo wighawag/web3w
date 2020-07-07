@@ -2,13 +2,13 @@
 
 The main store is wallet.
 
-![wallet](docs/wallet/wallet.svg?raw=true)
+![wallet](docs/diagrams/wallet/wallet.svg?raw=true)
 
 
 Store to track injected EIP-1193 ethereum object :
 
-![wallet](docs/builtin/builtin.svg?raw=true)
+![wallet](docs/diagrams/builtin/builtin.svg?raw=true)
 
 Chain store
 
-![chain](docs/chain/chain.svg?raw=true)
+![chain](docs/diagrams/chain/chain.svg?raw=true)
