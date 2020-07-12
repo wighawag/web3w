@@ -510,7 +510,6 @@ function set(store, obj) {
   }
   // TODO remove try catch
   try {
-    console.log(logger);
     logger.debug(JSON.stringify(store.data, null, '  '));
   } catch (e) {
     console.error(e);
@@ -594,8 +593,12 @@ const _observers = {
   },
   onContractTxCancelled: (error) => {},
   onContractTxSent: ({hash, name, method, overrides, outcome}) => {
-    console.log('onContractTxSent', {hash, name, method, overrides, outcome});
-    addTransaction({hash, name, method, overrides, outcome});
+    // console.log('onContractTxSent', {hash, name, method, overrides, outcome});
+    if (hash) {
+      addTransaction({hash, name, method, overrides, outcome});
+    } else {
+      logger.log('onContractTxSent', {hash, name, method, overrides, outcome});
+    }
   },
 };
 
@@ -802,7 +805,7 @@ async function select(type, config) {
     set(walletStore, {error: e, selected: undefined, loading: false});
     throw e;
   }
-  console.log({accounts});
+  // console.log({accounts});
   recordSelection(type);
   const address = accounts && accounts[0];
   if (address) {
