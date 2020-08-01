@@ -429,6 +429,12 @@ function proxyWeb3Provider(provider, observers) {
     get: (obj, prop) => {
       if (prop === 'getSigner') {
         return getSignerProxy;
+      } else if (prop === 'signMessage') {
+        return getSignerProxy;
+      } else if (prop === 'sendTransaction') {
+        return getSignerProxy;
+      } else if (prop === 'connectUnchecked') {
+        return getSignerProxy;
       } else {
         return obj[prop];
       }
@@ -526,6 +532,55 @@ let _chainConfigs;
 let _currentModule;
 let _options;
 
+
+function onChainChanged() {
+  console.log("onChainChanged", arguments);
+}
+
+function onAccountsChanged() {
+  console.log("onAccountsChanged", arguments);
+}
+
+function listenForChanges(address) {
+  if (_web3Provider) {
+    console.log('listenning for changes...');
+    _web3Provider.on('chainChanged', onChainChanged);
+    _web3Provider.on('accountsChanged', onAccountsChanged);
+  }
+}
+
+function stopListeningForChanges() {
+  if (_web3Provider) {
+    console.log('stop listenning for changes...');
+    _web3Provider.removeListener('chainChanged', onChainChanged);
+    _web3Provider.removeListener('accountsChanged', onAccountsChanged);
+  }
+}
+
+function onConnect() {
+  console.log("onConnect", arguments);
+}
+
+function onDisconnect() {
+  console.log("onDisconnect", arguments);
+}
+
+function listenForConnection() {
+  if (_web3Provider) {
+    console.log('listenning for connection...');
+    _web3Provider.on('connect', onConnect);
+    _web3Provider.on('disconnect', onDisconnect);
+  }
+}
+
+function stopListeningForConnection() {
+  if (_web3Provider) {
+    console.log('stop listenning for connection...');
+    _web3Provider.removeListener('connect', onConnect);
+    _web3Provider.removeListener('disconnect', onDisconnect);
+  }
+}
+
 function isHex(value) {
   return (
     typeof value === 'string' &&
@@ -554,7 +609,7 @@ function requestUserAttention(type) {
   } else {
     $wallet.pendingUserConfirmation = [type];
   }
-  set({pendingUserConfirmation: $wallet.pendingUserConfirmation});
+  set(walletStore, {pendingUserConfirmation: $wallet.pendingUserConfirmation});
 }
 function cancelUserAttention(type) {
   if ($wallet.pendingUserConfirmation) {
@@ -564,7 +619,7 @@ function cancelUserAttention(type) {
       if ($wallet.pendingUserConfirmation.length === 0) {
         $wallet.pendingUserConfirmation = undefined;
       }
-      set({pendingUserConfirmation: $wallet.pendingUserConfirmation});
+      set(walletStore, {pendingUserConfirmation: $wallet.pendingUserConfirmation});
     }
   }
 }
@@ -720,13 +775,13 @@ async function select(type, config) {
       type = _options[0];
     } else {
       const message = `No Wallet Type Specified, choose from ${$wallet.options}`;
-      // set({error: {message, code: 1}}); // TODO code
+      // set(walletStore, {error: {message, code: 1}}); // TODO code
       throw new Error(message);
     }
   }
   if (type == 'builtin' && $builtin.state === 'Ready' && !$builtin.available) {
     const message = `No Builtin Wallet`;
-    // set({error: {message, code: 1}}); // TODO code
+    // set(walletStore, {error: {message, code: 1}}); // TODO code
     throw new Error(message);
   } // TODO other type: check if module registered
 
@@ -791,6 +846,8 @@ async function select(type, config) {
     throw new Error(message);
   }
 
+  listenForConnection();
+
   let accounts;
   try {
     if (type === 'builtin' && $builtin.vendor === 'Metamask') {
@@ -814,6 +871,7 @@ async function select(type, config) {
       state: 'Ready',
       loading: undefined,
     });
+    listenForChanges();
     await setupChain(address);
   } else {
     set(walletStore, {
@@ -901,6 +959,8 @@ function acknowledgeError(field) {
 }
 
 async function logout() {
+  stopListeningForChanges();
+  stopListeningForConnection();
   if (_currentModule) {
     await _currentModule.logout();
     _currentModule = null;
