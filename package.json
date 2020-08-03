@@ -1,6 +1,6 @@
 {
   "name": "web3w",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "main": "dist/web3w.cjs.js",
   "module": "dist/web3w.esm.js",
   "browser": "dist/web3w.umd.js",

@@ -252,11 +252,11 @@ async function setupChain(address) {
   let addresses = {};
   let contractsInfos = {};
   const {chainId} = await _ethersProvider.getNetwork();
-  if (_chainConfigs) {
-    const chainConfigs = _chainConfigs;
-    if (typeof chainConfigs === 'function') {
-      chainConfigs = await chainConfigs(chainId);
-    }
+  let chainConfigs = _chainConfigs;
+  if (typeof chainConfigs === 'function') {
+    chainConfigs = await chainConfigs(chainId);
+  }
+  if (chainConfigs) { 
     if (chainConfigs.chainId) {
       if (
         chainId == chainConfigs.chainId ||
