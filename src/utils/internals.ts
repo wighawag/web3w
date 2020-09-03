@@ -69,7 +69,8 @@ export function subscribe<T>(store: Readable<T>, run: Subscriber<T>, invalidate?
     return noop;
   }
   const unsub = store.subscribe(run, invalidate);
-  return (unsub as any).unsubscribe ? () => (unsub as any).unsubscribe() : unsub;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (unsub as any).unsubscribe ? () => (unsub as any).unsubscribe() : unsub; // (support RxJs observable)
 }
 export function safe_not_equal<T, U>(a: T, b: U): boolean {
   return a != a ? b == b : (a as unknown) !== (b as unknown) || (a && typeof a === 'object') || typeof a === 'function';

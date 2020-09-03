@@ -4,6 +4,7 @@ import {Subscriber, Invalidator, StartStopNotifier, Readable, Writable, Unsubscr
 /** Pair of subscriber and invalidator. */
 type SubscribeInvalidateTuple<T> = [Subscriber<T>, Invalidator<T>];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const subscriber_queue: any[] = [];
 
 /**

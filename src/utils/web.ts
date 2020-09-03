@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 async function chrome76Detection(): Promise<boolean> {
   if ('storage' in navigator && 'estimate' in navigator.storage) {
     const {quota} = await navigator.storage.estimate();

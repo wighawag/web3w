@@ -3,23 +3,23 @@ import type {JsonRpcSigner, TransactionRequest, TransactionResponse, Web3Provide
 import {noop} from './internals';
 
 type ContractObservers = {
-  onContractTxRequested?: (tx: {name: string; method: string; overrides: Overrides; outcome: any}) => void;
-  onContractTxCancelled?: (tx: {name: string; method: string; overrides: Overrides; outcome: any}) => void;
-  onContractTxSent?: (tx: {hash: string; name: string; method: string; overrides: Overrides; outcome: any}) => void;
+  onContractTxRequested?: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
+  onContractTxCancelled?: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
+  onContractTxSent?: (tx: {hash: string; name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
 };
 
 type StrictContractObservers = ContractObservers & {
-  onContractTxRequested: (tx: {name: string; method: string; overrides: Overrides; outcome: any}) => void;
-  onContractTxCancelled: (tx: {name: string; method: string; overrides: Overrides; outcome: any}) => void;
-  onContractTxSent: (tx: {hash: string; name: string; method: string; overrides: Overrides; outcome: any}) => void;
+  onContractTxRequested: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
+  onContractTxCancelled: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
+  onContractTxSent: (tx: {hash: string; name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
 };
 
 type TxObservers = {
   onTxRequested?: (tx: TransactionRequest) => void;
   onTxCancelled?: (tx: TransactionRequest) => void;
   onTxSent?: (tx: TransactionResponse) => void;
-  onSignatureRequested?: (msg: any) => void;
-  onSignatureCancelled?: (msg: any) => void;
+  onSignatureRequested?: (msg: unknown) => void;
+  onSignatureCancelled?: (msg: unknown) => void;
   onSignatureReceived?: (signature: string) => void;
 };
 
@@ -27,34 +27,13 @@ type StrictTxObservers = TxObservers & {
   onTxRequested: (tx: TransactionRequest) => void;
   onTxCancelled: (tx: TransactionRequest) => void;
   onTxSent: (tx: TransactionResponse) => void;
-  onSignatureRequested: (msg: any) => void;
-  onSignatureCancelled: (msg: any) => void;
+  onSignatureRequested: (msg: unknown) => void;
+  onSignatureCancelled: (msg: unknown) => void;
   onSignatureReceived: (signature: string) => void;
 };
 
-// export function virtualContracts(onContractsRequested, observers) {
-//   observers = observers ? {...observers} : {};
-//   observers = {
-//     onContractTxRequested: observers.onContractTxRequested || noop,
-//     onContractTxCancelled: observers.onContractTxCancelled || noop,
-//     onContractTxSent: observers.onContractTxSent || noop,
-//   }
-//   const {onContractTxRequested, onContractTxCancelled, onContractTxSent} = observers;
-
-//   const fakeContracts = {};
-//   return new Proxy(fakeContracts, {
-//     get: (obj, contractName) => {
-
-//       if (prop === "functions") {
-//         return functionsProxy;
-//       } else if (contractToProxy.functions[prop]) {
-//         return proxyCall(contractToProxy.functions, prop);
-//       } else {
-//         return obj[prop];
-//       }
-//     }
-//   });
-// }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyFunction = (...args: any[]) => any;
 
 export function proxyContract(contractToProxy: Contract, name: string, observers?: ContractObservers): Contract {
   const actualObservers: StrictContractObservers = observers
@@ -70,7 +49,7 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
         onContractTxSent: noop,
       };
   const {onContractTxRequested, onContractTxCancelled, onContractTxSent} = actualObservers;
-  const proxies: {[methodName: string]: (...args: any[]) => any} = {};
+  const proxies: {[methodName: string]: AnyFunction} = {};
 
   const functionsInterface = contractToProxy.interface.functions;
   const nameToSig: {[name: string]: string} = {};
@@ -78,6 +57,7 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
     nameToSig[functionsInterface[sig].name] = sig;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contract: {[field: string]: any} = {};
   for (const key of Object.keys(contractToProxy)) {
     // TODO populate when contract become available
@@ -91,7 +71,7 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
   // TODO remove:
   // contract._original = contractToProxy;
 
-  function proxyCall(functions: {[methodName: string]: (...args: any[]) => any}, methodName: string) {
+  function proxyCall(functions: {[methodName: string]: AnyFunction}, methodName: string) {
     let callProxy = proxies[methodName];
     if (!callProxy) {
       let methodInterface = contractToProxy.interface.functions[methodName];
@@ -129,7 +109,8 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
             throw e;
           }
           onContractTxSent({
-            hash: tx.hash,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            hash: (tx as any).hash,
             name,
             method: methodName,
             overrides,
@@ -149,6 +130,7 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
   });
 
   return new Proxy(contract, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: (obj: any, prop: string) => {
       if (prop === 'functions') {
         return functionsProxy;
@@ -170,8 +152,8 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
 }
 
 function proxySigner(
-  signer: any,
-  applyMap: any,
+  signer: JsonRpcSigner,
+  applyMap: Record<string, AnyFunction>,
   {
     onTxRequested,
     onTxCancelled,
@@ -183,11 +165,12 @@ function proxySigner(
 ) {
   applyMap = Object.assign(
     {
-      sendTransaction: async (method: (...args: any[]) => any, thisArg: any, argumentsList: any[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sendTransaction: async (method: AnyFunction, thisArg: any, argumentsList: any[]) => {
         onTxRequested(argumentsList[0]);
-        let tx;
+        let tx: TransactionResponse;
         try {
-          tx = await method.bind(thisArg)(...argumentsList);
+          tx = (await method.bind(thisArg)(...argumentsList)) as TransactionResponse;
         } catch (e) {
           onTxCancelled(argumentsList[0]);
           throw e;
@@ -195,11 +178,12 @@ function proxySigner(
         onTxSent(tx);
         return tx;
       },
-      signMessage: async (method: (...args: any[]) => any, thisArg: any, argumentsList: any[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      signMessage: async (method: AnyFunction, thisArg: any, argumentsList: any[]) => {
         onSignatureRequested(argumentsList[0]);
-        let signature;
+        let signature: string;
         try {
-          signature = await method.bind(thisArg)(...argumentsList);
+          signature = (await method.bind(thisArg)(...argumentsList)) as string;
         } catch (e) {
           onSignatureCancelled(argumentsList[0]);
           throw e;
@@ -212,16 +196,19 @@ function proxySigner(
   );
   const proxies: {[methodName: string]: typeof Proxy} = {};
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function getProxy<T extends Record<string, any>>(methodName: string, handler: ProxyHandler<T>) {
     let proxy = proxies[methodName];
     if (!proxy) {
-      proxy = new Proxy(signer[methodName], handler);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      proxy = new Proxy((signer as any)[methodName], handler);
       proxies[methodName] = proxy;
     }
     return proxy;
   }
 
   return new Proxy(signer, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: (obj: any, prop: any) => {
       const applyFunc = applyMap[prop];
       if (applyFunc) {
@@ -243,8 +230,9 @@ function proxyJsonRpcSigner(signer: JsonRpcSigner, observers: StrictTxObservers)
   return proxySigner(
     signer,
     {
-      connectUnchecked: (method: (...args: any[]) => any, thisArg: any, argumentsList: any[]) => {
-        const signer = method.bind(thisArg)(...argumentsList);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      connectUnchecked: (method: AnyFunction, thisArg: any, argumentsList: any[]) => {
+        const signer: JsonRpcSigner = method.bind(thisArg)(...argumentsList) as JsonRpcSigner;
         return proxyUncheckedJsonRpcSigner(signer, observers);
       },
     },
@@ -280,6 +268,7 @@ export function proxyWeb3Provider(provider: Web3Provider, observers?: TxObserver
   });
 
   return new Proxy(provider, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: (obj, prop): any => {
       if (prop === 'getSigner') {
         return getSignerProxy;
@@ -290,6 +279,7 @@ export function proxyWeb3Provider(provider: Web3Provider, observers?: TxObserver
       } else if (prop === 'connectUnchecked') {
         return getSignerProxy;
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (obj as any)[prop];
       }
     },

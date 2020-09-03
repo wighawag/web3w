@@ -3,25 +3,25 @@
 import {Contract, Overrides} from '@ethersproject/contracts';
 import {
   Web3Provider,
-  Provider,
   TransactionRequest,
   TransactionResponse,
-  JsonRpcSigner,
   JsonRpcProvider,
+  ExternalProvider,
 } from '@ethersproject/providers';
 import {BigNumber} from '@ethersproject/bignumber';
 import {writable} from './utils/store';
 import {fetchEthereum, getVendor} from './utils/builtin';
 import {timeout} from './utils/index.js';
 import {proxyContract, proxyWeb3Provider} from './utils/ethers';
-import {Writable} from './utils/internals';
+import {Writable, Readable} from './utils/internals';
 import {logs} from 'named-logs';
+import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR} from './errors';
 
 const console = logs('web3w:index');
 
 type Base = {
   loading: boolean;
-  error: any;
+  error?: {code: number; message: string};
 };
 
 type BalanceData = Base & {
@@ -37,11 +37,13 @@ type BuiltinData = Base & {
   vendor?: string;
 };
 
+type Contracts = {[name: string]: Contract};
+
 type ChainData = Base & {
   state: 'Idle' | 'Ready';
   chainId?: string;
   addresses?: {[name: string]: string};
-  contracts?: {[name: string]: Contract};
+  contracts?: Contracts;
   notSupported?: boolean;
 };
 
@@ -54,16 +56,36 @@ type WalletData = Base & {
   pendingUserConfirmation?: string[];
 };
 
+type Abi = {type: string; name: string}[]; // TODO
+
 type WritableWithData<T> = Writable<T> & {data: T};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyFunction = (...args: any[]) => any;
+
+interface RequestArguments {
+  readonly method: string;
+  readonly params?: readonly unknown[] | unknown;
+}
+type WindowWeb3Provider = ExternalProvider & {
+  sendAsync?(
+    request: {jsonrpc: string; id: string; result?: unknown},
+    callback: (result: {jsonrpc: string}) => void
+  ): void;
+  send?(...args: unknown[]): unknown;
+  request?(args: RequestArguments): Promise<unknown>;
+  on(event: string, callback: AnyFunction): void;
+  removeListener(event: string, callback: AnyFunction): void;
+};
 
 type Module = {
   id: string;
-  setup(options?: ModuleOptions): Promise<{chainId: string; web3Provider: any}>;
+  setup(options?: ModuleOptions): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
   logout(): Promise<void>;
 };
 
 type ModuleOptions = (string | Module)[]; //TODO
-type ContractsInfos = {[name: string]: {address: string; abi: any[]}};
+type ContractsInfos = {[name: string]: {address: string; abi: Abi}};
 type ChainConfig = {
   chainId: string;
   contracts: ContractsInfos;
@@ -73,7 +95,17 @@ type MultiChainConfigs = {[chainId: string]: ChainConfig};
 
 type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
 
-type BuiltinConfig = any; // TODO
+type BuiltinConfig = {
+  autoProbe: boolean;
+}; // TODO
+
+type TransactionRecord = {
+  hash: string;
+  name: string;
+  method: string;
+  overrides: Overrides;
+  outcome: unknown;
+}; // TODO
 
 export type Web3wConfig = {
   builtin?: BuiltinConfig;
@@ -109,6 +141,12 @@ const $chain: ChainData = {
   error: undefined,
 };
 
+interface ProviderRpcError extends Error {
+  message: string;
+  code: number;
+  data?: unknown;
+}
+
 const $wallet: WalletData = {
   state: 'Idle', // Idle | Locked | Ready
   loading: false,
@@ -126,21 +164,23 @@ function store<T>(data: T): WritableWithData<T> {
   return result;
 }
 
-const $transactions: any[] = []; // TODO
+const $transactions: TransactionRecord[] = [];
 const walletStore = store($wallet);
 const transactionsStore = store($transactions);
 const builtinStore = store($builtin);
 const chainStore = store($chain);
 const balanceStore = store($balance);
 
-function addTransaction(obj: any) {
-  $transactions.push(obj);
+function addTransaction(tx: TransactionRecord) {
+  $transactions.push(tx);
   transactionsStore.set($transactions);
 }
 
 function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
   for (const key of Object.keys(obj)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anyObj = obj as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anyStore = store as any;
     if (anyStore.data[key] && typeof anyObj[key] === 'object') {
       for (const subKey of Object.keys(anyObj[key])) {
@@ -159,42 +199,43 @@ function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
   store.set(store.data);
 }
 
-function reset<T>(store: WritableWithData<T>, fields: string[]) {
-  if (typeof fields === 'string') {
-    fields = [fields];
-  }
-  const anyStore = store as any;
-  for (const field of fields) {
-    const current = anyStore.data[field];
-    if (typeof current === 'object') {
-      anyStore.data[field] = {status: undefined};
-    } else {
-      anyStore.data[field] = undefined;
-    }
-  }
-  store.set(store.data);
-}
+// function reset<T>(store: WritableWithData<T>, fields: string[]) {
+//   if (typeof fields === 'string') {
+//     fields = [fields];
+//   }
+//   const anyStore = store as any;
+//   for (const field of fields) {
+//     const current = anyStore.data[field];
+//     if (typeof current === 'object') {
+//       anyStore.data[field] = {status: undefined};
+//     } else {
+//       anyStore.data[field] = undefined;
+//     }
+//   }
+//   store.set(store.data);
+// }
 // //////////////////////////////////////////////////////////////////////////////
 
-let _ethersProvider: JsonRpcProvider | null;
-let _web3Provider: any;
-let _builtinEthersProvider: JsonRpcProvider;
-let _builtinWeb3Provider: any;
+let _ethersProvider: JsonRpcProvider | undefined;
+let _web3Provider: WindowWeb3Provider | undefined;
+let _builtinEthersProvider: JsonRpcProvider | undefined;
+let _builtinWeb3Provider: WindowWeb3Provider | undefined;
 let _chainConfigs: ChainConfigs;
 let _currentModule: Module | undefined;
 let _options: ModuleOptions;
 
-function onChainChanged(...args: any[]) {
-  console.debug('onChainChanged', ...args);
+function onChainChanged(chainId: string) {
+  //Note : chainId is hex encoded
+  console.debug('onChainChanged', {chainId});
 }
 
-function onAccountsChanged(...args: any[]) {
-  console.debug('onAccountsChanged', ...args);
+function onAccountsChanged(accounts: string[]) {
+  console.debug('onAccountsChanged', {accounts});
 }
 
 function listenForChanges(address: string) {
   if (_web3Provider) {
-    console.debug('listenning for changes...');
+    console.debug('listenning for changes...', {address});
     _web3Provider.on('chainChanged', onChainChanged);
     _web3Provider.on('accountsChanged', onAccountsChanged);
   }
@@ -208,12 +249,13 @@ function stopListeningForChanges() {
   }
 }
 
-function onConnect(...args: any[]) {
-  console.debug('onConnect', ...args);
+function onConnect({chainId}: {chainId: string}) {
+  //Note : chainId is hex encoded
+  console.debug('onConnect', {chainId});
 }
 
-function onDisconnect(...args: any[]) {
-  console.debug('onDisconnect', ...args);
+function onDisconnect(error?: ProviderRpcError) {
+  console.debug('onDisconnect', {error});
 }
 
 function listenForConnection() {
@@ -273,21 +315,27 @@ function cancelUserAttention(type: string) {
 
 const _observers = {
   onTxRequested: (transaction: TransactionRequest) => {
+    console.debug('onTxRequested', {transaction});
     requestUserAttention('transaction');
   },
   onTxCancelled: (transaction: TransactionRequest) => {
+    console.debug('onTxCancelled', {transaction});
     cancelUserAttention('transaction');
   },
-  onTxSent: (tx: TransactionResponse) => {
+  onTxSent: (transaction: TransactionResponse) => {
+    console.debug('onTxSent', {transaction});
     cancelUserAttention('transaction');
   },
-  onSignatureRequested: (message: any) => {
+  onSignatureRequested: (message: unknown) => {
+    console.debug('onSignatureRequested', {message});
     requestUserAttention('signature');
   },
-  onSignatureCancelled: (message: any) => {
+  onSignatureCancelled: (message: unknown) => {
+    console.debug('onSignatureCancelled', {message});
     cancelUserAttention('signature');
   },
   onSignatureReceived: (signature: string) => {
+    console.debug('onSignatureReceived', {signature});
     cancelUserAttention('signature');
   },
   onContractTxRequested: ({
@@ -299,7 +347,7 @@ const _observers = {
     name: string;
     method: string;
     overrides: Overrides;
-    outcome: any;
+    outcome: unknown;
   }) => {
     console.debug('onContractTxRequest', {name, method, overrides, outcome});
   },
@@ -312,7 +360,7 @@ const _observers = {
     name: string;
     method: string;
     overrides: Overrides;
-    outcome: any;
+    outcome: unknown;
   }) => {
     console.debug('onContractTxCancelled', {name, method, overrides, outcome});
   },
@@ -327,13 +375,11 @@ const _observers = {
     name: string;
     method: string;
     overrides: Overrides;
-    outcome: any;
+    outcome: unknown;
   }) => {
-    // console.debug('onContractTxSent', {hash, name, method, overrides, outcome});
+    console.debug('onContractTxSent', {hash, name, method, overrides, outcome});
     if (hash) {
       addTransaction({hash, name, method, overrides, outcome});
-    } else {
-      console.debug('onContractTxSent', {hash, name, method, overrides, outcome});
     }
   },
 };
@@ -348,8 +394,9 @@ function fetchPreviousSelection() {
 }
 
 async function setupChain(address: string) {
-  if (_ethersProvider === null) {
+  if (_ethersProvider === undefined) {
     const error = {
+      code: CHAIN_NO_PROVIDER,
       message: `no provider setup yet`,
     };
     set(chainStore, {
@@ -376,6 +423,7 @@ async function setupChain(address: string) {
         contractsInfos = chainConfig.contracts;
       } else {
         const error = {
+          code: CHAIN_CONFIG_NOT_AVAILABLE,
           message: `chainConfig only available for ${chainConfig.chainId} , not available for ${chainId}`,
         };
         set(chainStore, {
@@ -391,7 +439,7 @@ async function setupChain(address: string) {
       const multichainConfigs = chainConfigs as MultiChainConfigs;
       const chainConfig = multichainConfigs[chainId] || multichainConfigs[toHex(chainId)];
       if (!chainConfig) {
-        const error = {message: `chainConfig not available for ${chainId}`};
+        const error = {code: CHAIN_CONFIG_NOT_AVAILABLE, message: `chainConfig not available for ${chainId}`};
         set(chainStore, {
           error,
           chainId,
@@ -405,16 +453,6 @@ async function setupChain(address: string) {
       }
     }
     for (const contractName of Object.keys(contractsInfos)) {
-      if (contractName === 'status') {
-        const error = {message: `invalid name for contract : "status"`};
-        set(chainStore, {error, state: 'Idle', loading: false});
-        throw new Error(error.message);
-      }
-      if (contractName === 'error') {
-        const error = {message: `invalid name for contract : "error"`};
-        set(chainStore, {error, state: 'Idle', loading: false});
-        throw new Error(error.message);
-      }
       const contractInfo = contractsInfos[contractName];
       if (contractInfo.abi) {
         contractsToAdd[contractName] = proxyContract(
@@ -435,6 +473,7 @@ async function setupChain(address: string) {
   }); // TODO None ?
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function select(type: string, moduleConfig?: any) {
   if ($wallet.selected && ($wallet.state === 'Ready' || $wallet.state === 'Locked')) {
     await logout();
@@ -466,8 +505,8 @@ async function select(type: string, moduleConfig?: any) {
     state: 'Idle',
     error: undefined,
   });
-  _ethersProvider = null;
-  _web3Provider = null;
+  _ethersProvider = undefined;
+  _web3Provider = undefined;
   if (typeOrModule === 'builtin') {
     _currentModule = undefined;
     await probeBuiltin(); // TODO try catch ?
@@ -499,7 +538,7 @@ async function select(type: string, moduleConfig?: any) {
     }
 
     try {
-      const {chainId, web3Provider} = await module.setup(moduleConfig); // TODO pass config in select to choose network
+      const {web3Provider} = await module.setup(moduleConfig); // TODO pass config in select to choose network
       _web3Provider = web3Provider;
       _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
       _currentModule = module;
@@ -508,7 +547,7 @@ async function select(type: string, moduleConfig?: any) {
         set(walletStore, {loading: false, selected: undefined});
       } else {
         set(walletStore, {
-          error: {message: e.message},
+          error: {code: MODULE_ERROR, message: e.message},
           selected: undefined,
           loading: false,
         });
@@ -564,7 +603,7 @@ async function select(type: string, moduleConfig?: any) {
 }
 
 let probing: Promise<void> | undefined;
-function probeBuiltin(config = {}) {
+function probeBuiltin() {
   if (probing) {
     return probing;
   }
@@ -584,13 +623,6 @@ function probeBuiltin(config = {}) {
           available: true,
           loading: undefined,
         });
-        // if (config.metamaskReloadFix && $wallet.builtin.vendor === "Metamask") {
-        //   // see https://github.com/MetaMask/metamask-extension/issues/7221
-        //   await timeout(1000, _builtinEthersProvider.send("eth_chainId", []), () => {
-        //     // window.location.reload();
-        //     console.debug('RELOAD');
-        //   });
-        // }
       } else {
         set(builtinStore, {
           state: 'Ready',
@@ -623,7 +655,7 @@ function probeBuiltin(config = {}) {
 //   }
 // }
 
-async function connect(type: string, moduleConfig?: any) {
+async function connect(type: string, moduleConfig?: unknown) {
   await select(type, moduleConfig);
   if ($wallet.state === 'Locked') {
     return unlock();
@@ -718,14 +750,37 @@ function unlock() {
 }
 
 // /////////////////////////////////////////////////////////////////////////////////
-export default (config: Web3wConfig) => {
+export default (
+  config: Web3wConfig
+): {
+  transactions: Readable<TransactionRecord[]>;
+  balance: Readable<BalanceData>;
+  chain: Readable<ChainData>;
+  builtin: Readable<BuiltinData> & {
+    probe: () => Promise<void>;
+  };
+  wallet: Readable<WalletData> & {
+    connect: typeof connect;
+    unlock: typeof unlock;
+    acknowledgeError: typeof acknowledgeError;
+    logout: typeof logout;
+    readonly address: string | undefined;
+    readonly provider: JsonRpcProvider | undefined;
+    readonly web3Provider: WindowWeb3Provider | undefined;
+    readonly chain: ChainData;
+    readonly contracts: Contracts | undefined;
+    readonly balance: BigNumber | undefined;
+  };
+} => {
   config = {...(config || {})};
-  config.builtin = config.builtin || {};
+  config.builtin = config.builtin || {autoProbe: false};
   const {debug, chainConfigs, builtin} = config;
 
   _chainConfigs = chainConfigs;
   if (debug && typeof window !== 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).$wallet = $wallet;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).$transactions = $transactions;
   }
 
@@ -759,8 +814,8 @@ export default (config: Web3wConfig) => {
         select(type);
       }
     }
-    if (config.builtin.autoProbe) {
-      probeBuiltin(config.builtin);
+    if (builtin.autoProbe) {
+      probeBuiltin();
     }
   }
 

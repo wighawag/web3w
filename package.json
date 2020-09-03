@@ -48,6 +48,7 @@
     "build-cjs": "tsc -p tsconfig-cjs.json && terser-folder tmp/cjs -x .js -e -o dist/cjs --config-file terser.json",
     "build-umd": "tsc -p tsconfig-umd.json && terser-folder tmp/umd -x .js -e -o dist/umd --config-file terser.json",
     "build": "run-s build-esm build-cjs build-umd",
+    "lint": "eslint src/**/*.{js,ts,tsx} --quiet --fix",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
