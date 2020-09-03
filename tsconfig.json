@@ -8,8 +8,8 @@
     "moduleResolution": "node",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": false, // TODO terser
-    "outDir": "tmp/esm"
+    "sourceMap": true,
+    "outDir": "dist/esm"
   },
   "include": ["./src"]
 }

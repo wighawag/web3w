@@ -1,1 +1,24 @@
-export const noop=()=>void 0;export function subscribe(e,t,n){if(null==e)return noop;const o=e.subscribe(t,n);return o.unsubscribe?()=>o.unsubscribe():o}export function safe_not_equal(e,t){return e!=e?t==t:e!==t||e&&"object"==typeof e||"function"==typeof e}export function get_store_value(e){let t;return subscribe(e,e=>t=e)(),t}
+export const noop = () => undefined;
+// export function run_all(fns) {
+// 	fns.forEach(run);
+// }
+export function subscribe(store, run, invalidate) {
+    if (store == null) {
+        return noop;
+    }
+    const unsub = store.subscribe(run, invalidate);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return unsub.unsubscribe ? () => unsub.unsubscribe() : unsub; // (support RxJs observable)
+}
+export function safe_not_equal(a, b) {
+    return a != a ? b == b : a !== b || (a && typeof a === 'object') || typeof a === 'function';
+}
+export function get_store_value(store) {
+    let value;
+    subscribe(store, (_) => (value = _))();
+    return value;
+}
+// export function is_function(thing: any): thing is Function {
+// 	return typeof thing === 'function';
+// }
+//# sourceMappingURL=internals.js.map

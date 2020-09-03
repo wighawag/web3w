@@ -1,1 +1,225 @@
-var __awaiter=this&&this.__awaiter||function(n,e,o,t){return new(o||(o=Promise))(function(r,c){function i(n){try{s(t.next(n))}catch(n){c(n)}}function a(n){try{s(t.throw(n))}catch(n){c(n)}}function s(n){var e;n.done?r(n.value):(e=n.value,e instanceof o?e:new o(function(n){n(e)})).then(i,a)}s((t=t.apply(n,e||[])).next())})};import{noop}from"./internals";export function proxyContract(n,e,o){const t=o?Object.assign({onContractTxRequested:noop,onContractTxCancelled:noop,onContractTxSent:noop},o):{onContractTxRequested:noop,onContractTxCancelled:noop,onContractTxSent:noop},{onContractTxRequested:r,onContractTxCancelled:c,onContractTxSent:i}=t,a={},s=n.interface.functions,u={};for(const n of Object.keys(s))u[s[n].name]=n;const d={};for(const e of Object.keys(n))d[e]=n[e];d.functions={};for(const e of Object.keys(n.functions))d.functions[e]=n.functions[e];function p(o,t){let s=a[t];if(!s){let d=n.interface.functions[t];d||(d=n.interface.functions[u[t]]),s=new Proxy(o[t],{apply:(n,a,s)=>__awaiter(this,void 0,void 0,function*(){const a=s.length;let u,p,f;a===d.inputs.length+1&&"object"==typeof s[a-1]&&(u=s[a]),u&&(p=u.outcome,delete u.outcome),r({name:e,method:t,overrides:u,outcome:p});try{f=yield n.bind(o)(...s)}catch(n){throw c({name:e,method:t,overrides:u,outcome:p}),n}return i({hash:f.hash,name:e,method:t,overrides:u,outcome:p}),f})}),a[t]=s}return s}const f=new Proxy(d.functions,{get:(e,o)=>p(n.functions,o)});return new Proxy(d,{get:(e,o)=>"functions"===o?f:n.functions[o]?p(n.functions,o):"_proxiedContract"===o?n:"toJSON"===o?()=>({address:n.address,abi:n.interface.fragments}):e[o]})}function proxySigner(n,e,{onTxRequested:o,onTxCancelled:t,onTxSent:r,onSignatureRequested:c,onSignatureCancelled:i,onSignatureReceived:a}){e=Object.assign({sendTransaction:(n,e,c)=>__awaiter(this,void 0,void 0,function*(){let i;o(c[0]);try{i=yield n.bind(e)(...c)}catch(n){throw t(c[0]),n}return r(i),i}),signMessage:(n,e,o)=>__awaiter(this,void 0,void 0,function*(){let t;c(o[0]);try{t=yield n.bind(e)(...o)}catch(n){throw i(o[0]),n}return a(t),t})},e);const s={};return new Proxy(n,{get:(o,t)=>{const r=e[t];return r?function(e,o){let t=s[e];return t||(t=new Proxy(n[e],o),s[e]=t),t}(t,{apply:r}):o[t]}})}function proxyUncheckedJsonRpcSigner(n,e){return proxySigner(n,{},e)}function proxyJsonRpcSigner(n,e){return proxySigner(n,{connectUnchecked:(n,o,t)=>{return proxyUncheckedJsonRpcSigner(n.bind(o)(...t),e)}},e)}export function proxyWeb3Provider(n,e){const o=e?Object.assign({onTxRequested:noop,onTxCancelled:noop,onTxSent:noop,onSignatureRequested:noop,onSignatureCancelled:noop,onSignatureReceived:noop},e):{onTxRequested:noop,onTxCancelled:noop,onTxSent:noop,onSignatureRequested:noop,onSignatureCancelled:noop,onSignatureReceived:noop},t=new Proxy(n.getSigner,{apply:(e,t,r)=>{return proxyJsonRpcSigner(e.bind(n)(...r),o)}});return new Proxy(n,{get:(n,e)=>"getSigner"===e?t:"signMessage"===e?t:"sendTransaction"===e?t:"connectUnchecked"===e?t:n[e]})}
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+import { noop } from './internals';
+export function proxyContract(contractToProxy, name, observers) {
+    const actualObservers = observers
+        ? Object.assign({ onContractTxRequested: noop, onContractTxCancelled: noop, onContractTxSent: noop }, observers) : {
+        onContractTxRequested: noop,
+        onContractTxCancelled: noop,
+        onContractTxSent: noop,
+    };
+    const { onContractTxRequested, onContractTxCancelled, onContractTxSent } = actualObservers;
+    const proxies = {};
+    const functionsInterface = contractToProxy.interface.functions;
+    const nameToSig = {};
+    for (const sig of Object.keys(functionsInterface)) {
+        nameToSig[functionsInterface[sig].name] = sig;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contract = {};
+    for (const key of Object.keys(contractToProxy)) {
+        // TODO populate when contract become available
+        contract[key] = contractToProxy[key];
+    }
+    contract.functions = {};
+    for (const key of Object.keys(contractToProxy.functions)) {
+        contract.functions[key] = contractToProxy.functions[key];
+    }
+    // TODO remove:
+    // contract._original = contractToProxy;
+    function proxyCall(functions, methodName) {
+        let callProxy = proxies[methodName];
+        if (!callProxy) {
+            let methodInterface = contractToProxy.interface.functions[methodName];
+            if (!methodInterface) {
+                methodInterface = contractToProxy.interface.functions[nameToSig[methodName]];
+            }
+            callProxy = new Proxy(functions[methodName], {
+                // TODO empty object (to populate later when contract is available ?)
+                apply: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
+                    const numArguments = argumentsList.length;
+                    let overrides;
+                    if (numArguments === methodInterface.inputs.length + 1 &&
+                        typeof argumentsList[numArguments - 1] === 'object') {
+                        overrides = argumentsList[numArguments];
+                    }
+                    let outcome;
+                    if (overrides) {
+                        outcome = overrides.outcome;
+                        delete overrides.outcome;
+                    }
+                    onContractTxRequested({ name, method: methodName, overrides, outcome });
+                    let tx;
+                    try {
+                        tx = yield method.bind(functions)(...argumentsList);
+                    }
+                    catch (e) {
+                        onContractTxCancelled({
+                            name,
+                            method: methodName,
+                            overrides,
+                            outcome,
+                        }); // TODO id to identify?
+                        throw e;
+                    }
+                    onContractTxSent({
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        hash: tx.hash,
+                        name,
+                        method: methodName,
+                        overrides,
+                        outcome,
+                    });
+                    return tx;
+                }),
+            });
+            proxies[methodName] = callProxy;
+        }
+        return callProxy;
+    }
+    const functionsProxy = new Proxy(contract.functions, {
+        get: (functions, methodName) => {
+            return proxyCall(contractToProxy.functions, methodName); // TODO empty
+        },
+    });
+    return new Proxy(contract, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get: (obj, prop) => {
+            if (prop === 'functions') {
+                return functionsProxy;
+            }
+            else if (contractToProxy.functions[prop]) {
+                return proxyCall(contractToProxy.functions, prop);
+            }
+            else if (prop === '_proxiedContract') {
+                return contractToProxy;
+            }
+            else if (prop === 'toJSON') {
+                // TODO test
+                return () => ({
+                    address: contractToProxy.address,
+                    abi: contractToProxy.interface.fragments,
+                });
+            }
+            else {
+                return obj[prop]; // TODO prototype access ?
+            }
+        },
+    });
+}
+function proxySigner(signer, applyMap, { onTxRequested, onTxCancelled, onTxSent, onSignatureRequested, onSignatureCancelled, onSignatureReceived, }) {
+    applyMap = Object.assign({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sendTransaction: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
+            onTxRequested(argumentsList[0]);
+            let tx;
+            try {
+                tx = (yield method.bind(thisArg)(...argumentsList));
+            }
+            catch (e) {
+                onTxCancelled(argumentsList[0]);
+                throw e;
+            }
+            onTxSent(tx);
+            return tx;
+        }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        signMessage: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
+            onSignatureRequested(argumentsList[0]);
+            let signature;
+            try {
+                signature = (yield method.bind(thisArg)(...argumentsList));
+            }
+            catch (e) {
+                onSignatureCancelled(argumentsList[0]);
+                throw e;
+            }
+            onSignatureReceived(signature);
+            return signature;
+        }),
+    }, applyMap);
+    const proxies = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function getProxy(methodName, handler) {
+        let proxy = proxies[methodName];
+        if (!proxy) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            proxy = new Proxy(signer[methodName], handler);
+            proxies[methodName] = proxy;
+        }
+        return proxy;
+    }
+    return new Proxy(signer, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get: (obj, prop) => {
+            const applyFunc = applyMap[prop];
+            if (applyFunc) {
+                return getProxy(prop, {
+                    apply: applyFunc,
+                });
+            }
+            else {
+                return obj[prop];
+            }
+        },
+    });
+}
+function proxyUncheckedJsonRpcSigner(signer, observers) {
+    return proxySigner(signer, {}, observers);
+}
+function proxyJsonRpcSigner(signer, observers) {
+    return proxySigner(signer, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        connectUnchecked: (method, thisArg, argumentsList) => {
+            const signer = method.bind(thisArg)(...argumentsList);
+            return proxyUncheckedJsonRpcSigner(signer, observers);
+        },
+    }, observers);
+}
+export function proxyWeb3Provider(provider, observers) {
+    const actualObservers = observers
+        ? Object.assign({ onTxRequested: noop, onTxCancelled: noop, onTxSent: noop, onSignatureRequested: noop, onSignatureCancelled: noop, onSignatureReceived: noop }, observers) : {
+        onTxRequested: noop,
+        onTxCancelled: noop,
+        onTxSent: noop,
+        onSignatureRequested: noop,
+        onSignatureCancelled: noop,
+        onSignatureReceived: noop,
+    };
+    const getSignerProxy = new Proxy(provider.getSigner, {
+        // TODO wallet.connect on demand if not Ready // error out if not accepted // special state ?
+        apply: (getSigner, thisArg, argumentsList) => {
+            const signer = getSigner.bind(provider)(...argumentsList);
+            return proxyJsonRpcSigner(signer, actualObservers);
+        },
+    });
+    return new Proxy(provider, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get: (obj, prop) => {
+            if (prop === 'getSigner') {
+                return getSignerProxy;
+            }
+            else if (prop === 'signMessage') {
+                return getSignerProxy;
+            }
+            else if (prop === 'sendTransaction') {
+                return getSignerProxy;
+            }
+            else if (prop === 'connectUnchecked') {
+                return getSignerProxy;
+            }
+            else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return obj[prop];
+            }
+        },
+    });
+}
+//# sourceMappingURL=ethers.js.map
