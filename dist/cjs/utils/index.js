@@ -1,0 +1,1 @@
+"use strict";function timeout(e,t,o){return new Promise((r,i)=>{let u=!1;const n=setTimeout(()=>{u=!0,o?"function"==typeof o?r(o()):i(o.error||o):i(new Error("TimedOut"))},e);t.then(e=>{u||(clearTimeout(n),r(e))}).catch(e=>{u||(clearTimeout(n),i(e))})})}Object.defineProperty(exports,"__esModule",{value:!0}),exports.timeout=void 0,exports.timeout=timeout;

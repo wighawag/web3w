@@ -1,4 +1,12 @@
 {
   "plantuml.diagramsRoot": "documentation/diagrams",
-  "plantuml.exportOutDir": "docs/diagrams"
+  "plantuml.exportOutDir": "docs/diagrams",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "[json]": {
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {}
+  }
 }

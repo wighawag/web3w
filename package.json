@@ -1,9 +1,25 @@
 {
   "name": "web3w",
-  "version": "0.1.3",
-  "main": "dist/web3w.cjs.js",
-  "module": "dist/web3w.esm.js",
-  "browser": "dist/web3w.umd.js",
+  "version": "0.2.0",
+  "description": "Observable Store for Web3 Browser with ethers contracts integration",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "browser": "dist/umd/index.js",
+  "files": [
+    "dist/"
+  ],
+  "author": "Ronan Sandford",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com:wighawag/web3w.git"
+  },
+  "keywords": [
+    "web3",
+    "wallet",
+    "ethereum",
+    "ethers.js"
+  ],
   "peerDependencies": {
     "@ethersproject/bignumber": "^5.0.0-beta.138",
     "@ethersproject/contracts": "^5.0.0-beta.151",
@@ -13,20 +29,28 @@
     "@ethersproject/bignumber": "^5.0.0-beta.138",
     "@ethersproject/contracts": "^5.0.0-beta.151",
     "@ethersproject/providers": "^5.0.0-beta.164",
-    "@rollup/plugin-json": "^4.0.3",
-    "rollup": "^1.20.0",
-    "rollup-plugin-commonjs": "^10.0.0",
-    "rollup-plugin-node-resolve": "^5.1.0",
-    "eslint": "^7.2.0",
+    "@typescript-eslint/eslint-plugin": "^3.9.1",
+    "@typescript-eslint/parser": "^3.9.1",
+    "eslint": "^7.7.0",
     "eslint-config-prettier": "^6.11.0",
-    "eslint-plugin-prettier": "^3.1.3",
-    "prettier": "^2.0.5"
+    "eslint-plugin-prettier": "^3.1.4",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^2.0.5",
+    "rimraf": "^3.0.2",
+    "terser": "^5.2.1",
+    "terser-folder": "^2.0.0",
+    "typescript": "^3.8.3"
   },
   "scripts": {
-    "format": "prettier --write src/**/*.js",
-    "build": "rollup -c",
-    "dev": "rollup -c -w",
-    "test": "node test/test.js",
-    "pretest": "yarn run build"
+    "prepare": "node .setup.js && node fix_ethers_modules.js && npm run build",
+    "dev": "tsc -w -p tsconfig.json --outDir dist/esm",
+    "build-esm": "rimraf dist/esm && tsc -p tsconfig.json && terser-folder tmp/esm -x .js -e -o dist/esm --config-file terser.json",
+    "build-cjs": "tsc -p tsconfig-cjs.json && terser-folder tmp/cjs -x .js -e -o dist/cjs --config-file terser.json",
+    "build-umd": "tsc -p tsconfig-umd.json && terser-folder tmp/umd -x .js -e -o dist/umd --config-file terser.json",
+    "build": "run-s build-esm build-cjs build-umd",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "named-logs": "^0.0.6"
   }
 }
