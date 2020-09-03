@@ -174,16 +174,17 @@ declare module "index" {
     }
     type WindowWeb3Provider = ExternalProvider & {
         sendAsync?(request: {
-            jsonrpc: string;
-            id: string;
+            method: string;
+            params?: unknown[];
+        }, callback: (error: unknown, result: {
+            jsonrpc: '2.0';
+            error?: unknown;
             result?: unknown;
-        }, callback: (result: {
-            jsonrpc: string;
         }) => void): void;
         send?(...args: unknown[]): unknown;
         request?(args: RequestArguments): Promise<unknown>;
-        on(event: string, callback: AnyFunction): void;
-        removeListener(event: string, callback: AnyFunction): void;
+        on?(event: string, callback: AnyFunction): void;
+        removeListener?(event: string, callback: AnyFunction): void;
     };
     type Module = {
         id: string;

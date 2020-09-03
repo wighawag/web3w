@@ -105,6 +105,7 @@ function set(store, obj) {
 //   store.set(store.data);
 // }
 // //////////////////////////////////////////////////////////////////////////////
+let _listenning = false;
 let _ethersProvider;
 let _web3Provider;
 let _builtinEthersProvider;
@@ -113,29 +114,104 @@ let _chainConfigs;
 let _currentModule;
 let _options;
 function onChainChanged(chainId) {
-    //Note : chainId is hex encoded
-    console.debug('onChainChanged', { chainId });
+    return __awaiter(this, void 0, void 0, function* () {
+        if (chainId === '0xNaN') {
+            console.warn('onChainChanged bug (return 0xNaN), metamask bug?');
+            if (!_web3Provider) {
+                throw new Error('no web3Provider to get chainId');
+            }
+            chainId = yield providerSend(_web3Provider, 'eth_chainId');
+        }
+        const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+        console.debug('onChainChanged', { chainId, chainIdAsDecimal });
+    });
 }
 function onAccountsChanged(accounts) {
     console.debug('onAccountsChanged', { accounts });
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function providerSend(provider, method, params) {
+    var _a;
+    if (provider.request) {
+        return provider.request({ method, params });
+    }
+    const sendAsync = (_a = provider.sendAsync) === null || _a === void 0 ? void 0 : _a.bind(provider);
+    if (sendAsync) {
+        return new Promise((resolve, reject) => {
+            sendAsync({ method, params }, (error, response) => {
+                if (error) {
+                    reject(error);
+                }
+                else if (response.error) {
+                    reject(response.error);
+                }
+                else {
+                    resolve(response.result);
+                }
+            });
+        });
+    }
+    throw new Error('provider not supported');
+}
+function pollChainChanged(web3Provider, callback) {
+    return __awaiter(this, void 0, void 0, function* () {
+        while (_listenning) {
+            const chainId = yield providerSend(web3Provider, 'eth_chainId');
+            const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+            if (_listenning && $chain.chainId !== chainIdAsDecimal) {
+                try {
+                    callback(chainId);
+                }
+                catch (e) {
+                    console.error(e);
+                    // TODO error in chain.error
+                }
+            }
+        }
+    });
+}
+function pollAccountsChanged(web3Provider, callback) {
+    return __awaiter(this, void 0, void 0, function* () {
+        while (_listenning) {
+            const accounts = yield providerSend(web3Provider, 'eth_accounts');
+            if (_listenning && accounts[0] !== $wallet.address) {
+                // TODO multi account support ?
+                try {
+                    callback(accounts);
+                }
+                catch (e) {
+                    console.error(e);
+                    // TODO error in wallet.error
+                }
+            }
+        }
+    });
+}
 function listenForChanges(address) {
     if (_web3Provider) {
+        _listenning = true;
         console.debug('listenning for changes...', { address });
-        _web3Provider.on('chainChanged', onChainChanged);
-        _web3Provider.on('accountsChanged', onAccountsChanged);
+        if (_web3Provider.on) {
+            _web3Provider.on('chainChanged', onChainChanged);
+            _web3Provider.on('accountsChanged', onAccountsChanged);
+        }
+        else {
+            pollChainChanged(_web3Provider, onChainChanged);
+            pollAccountsChanged(_web3Provider, onAccountsChanged);
+        }
     }
 }
 function stopListeningForChanges() {
+    _listenning = false;
     if (_web3Provider) {
         console.debug('stop listenning for changes...');
-        _web3Provider.removeListener('chainChanged', onChainChanged);
-        _web3Provider.removeListener('accountsChanged', onAccountsChanged);
+        _web3Provider.removeListener && _web3Provider.removeListener('chainChanged', onChainChanged);
+        _web3Provider.removeListener && _web3Provider.removeListener('accountsChanged', onAccountsChanged);
     }
 }
 function onConnect({ chainId }) {
-    //Note : chainId is hex encoded
-    console.debug('onConnect', { chainId });
+    const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+    console.debug('onConnect', { chainId, chainIdAsDecimal });
 }
 function onDisconnect(error) {
     console.debug('onDisconnect', { error });
@@ -143,15 +219,15 @@ function onDisconnect(error) {
 function listenForConnection() {
     if (_web3Provider) {
         console.debug('listenning for connection...');
-        _web3Provider.on('connect', onConnect);
-        _web3Provider.on('disconnect', onDisconnect);
+        _web3Provider.on && _web3Provider.on('connect', onConnect);
+        _web3Provider.on && _web3Provider.on('disconnect', onDisconnect);
     }
 }
 function stopListeningForConnection() {
     if (_web3Provider) {
         console.debug('stop listenning for connection...');
-        _web3Provider.removeListener('connect', onConnect);
-        _web3Provider.removeListener('disconnect', onDisconnect);
+        _web3Provider.removeListener && _web3Provider.removeListener('connect', onConnect);
+        _web3Provider.removeListener && _web3Provider.removeListener('disconnect', onDisconnect);
     }
 }
 function isHex(value) {

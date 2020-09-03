@@ -40,7 +40,7 @@ type BuiltinData = Base & {
 type Contracts = {[name: string]: Contract};
 
 type ChainData = Base & {
-  state: 'Idle' | 'Ready';
+  state: 'Idle' | 'Connected' | 'Ready';
   chainId?: string;
   addresses?: {[name: string]: string};
   contracts?: Contracts;
@@ -69,13 +69,13 @@ interface RequestArguments {
 }
 type WindowWeb3Provider = ExternalProvider & {
   sendAsync?(
-    request: {jsonrpc: string; id: string; result?: unknown},
-    callback: (result: {jsonrpc: string}) => void
+    request: {method: string; params?: unknown[]},
+    callback: (error: unknown, result: {jsonrpc: '2.0'; error?: unknown; result?: unknown}) => void
   ): void;
   send?(...args: unknown[]): unknown;
   request?(args: RequestArguments): Promise<unknown>;
-  on(event: string, callback: AnyFunction): void;
-  removeListener(event: string, callback: AnyFunction): void;
+  on?(event: string, callback: AnyFunction): void;
+  removeListener?(event: string, callback: AnyFunction): void;
 };
 
 type Module = {
@@ -216,6 +216,7 @@ function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
 // }
 // //////////////////////////////////////////////////////////////////////////////
 
+let _listenning = false;
 let _ethersProvider: JsonRpcProvider | undefined;
 let _web3Provider: WindowWeb3Provider | undefined;
 let _builtinEthersProvider: JsonRpcProvider | undefined;
@@ -224,53 +225,137 @@ let _chainConfigs: ChainConfigs;
 let _currentModule: Module | undefined;
 let _options: ModuleOptions;
 
-function onChainChanged(chainId: string) {
-  //Note : chainId is hex encoded
-  console.debug('onChainChanged', {chainId});
+async function onChainChanged(chainId: string) {
+  if (chainId === '0xNaN') {
+    console.warn('onChainChanged bug (return 0xNaN), metamask bug?');
+    if (!_web3Provider) {
+      throw new Error('no web3Provider to get chainId');
+    }
+    chainId = await providerSend(_web3Provider, 'eth_chainId');
+  }
+  const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+  console.debug('onChainChanged', {chainId, chainIdAsDecimal}); // TODO
+  set(chainStore, {
+    contracts: undefined,
+    addresses: undefined,
+    state: 'Connected',
+    chainId: chainIdAsDecimal,
+    notSupported: undefined,
+  });
+  // TODO load
 }
 
 function onAccountsChanged(accounts: string[]) {
-  console.debug('onAccountsChanged', {accounts});
+  console.debug('onAccountsChanged', {accounts}); // TODO
+  set(walletStore, {address: accounts[0]});
+  // TODO balance
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function providerSend(provider: WindowWeb3Provider, method: string, params?: unknown[]): Promise<any> {
+  if (provider.request) {
+    return provider.request({method, params});
+  }
+  const sendAsync = provider.sendAsync?.bind(provider);
+  if (sendAsync) {
+    return new Promise<unknown>((resolve, reject) => {
+      sendAsync({method, params}, (error, response) => {
+        if (error) {
+          reject(error);
+        } else if (response.error) {
+          reject(response.error);
+        } else {
+          resolve(response.result);
+        }
+      });
+    });
+  }
+  throw new Error('provider not supported');
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function pollChainChanged(web3Provider: WindowWeb3Provider, callback: (chainId: string) => void) {
+  while (_listenning) {
+    const chainId: string = await providerSend(web3Provider, 'eth_chainId');
+    const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+    if (_listenning && $chain.chainId !== chainIdAsDecimal) {
+      try {
+        callback(chainId);
+      } catch (e) {
+        console.error(e);
+        // TODO error in chain.error
+      }
+    }
+    await wait(3000);
+  }
+}
+
+async function pollAccountsChanged(web3Provider: WindowWeb3Provider, callback: (accounts: string[]) => void) {
+  while (_listenning) {
+    const accounts: string[] = await providerSend(web3Provider, 'eth_accounts');
+    if (_listenning && accounts[0] !== $wallet.address) {
+      // TODO multi account support ?
+      try {
+        callback(accounts);
+      } catch (e) {
+        console.error(e);
+        // TODO error in wallet.error
+      }
+    }
+    await wait(3000);
+  }
 }
 
 function listenForChanges(address: string) {
   if (_web3Provider) {
+    _listenning = true;
     console.debug('listenning for changes...', {address});
-    _web3Provider.on('chainChanged', onChainChanged);
-    _web3Provider.on('accountsChanged', onAccountsChanged);
+    if (_web3Provider.on) {
+      _web3Provider.on('chainChanged', onChainChanged);
+      _web3Provider.on('accountsChanged', onAccountsChanged);
+    } else {
+      pollChainChanged(_web3Provider, onChainChanged);
+      pollAccountsChanged(_web3Provider, onAccountsChanged);
+    }
   }
 }
 
 function stopListeningForChanges() {
+  _listenning = false;
   if (_web3Provider) {
     console.debug('stop listenning for changes...');
-    _web3Provider.removeListener('chainChanged', onChainChanged);
-    _web3Provider.removeListener('accountsChanged', onAccountsChanged);
+    _web3Provider.removeListener && _web3Provider.removeListener('chainChanged', onChainChanged);
+    _web3Provider.removeListener && _web3Provider.removeListener('accountsChanged', onAccountsChanged);
   }
 }
 
 function onConnect({chainId}: {chainId: string}) {
-  //Note : chainId is hex encoded
-  console.debug('onConnect', {chainId});
+  const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+  console.debug('onConnect', {chainId, chainIdAsDecimal}); // TODO
 }
 
 function onDisconnect(error?: ProviderRpcError) {
-  console.debug('onDisconnect', {error});
+  console.debug('onDisconnect', {error}); // TODO
 }
 
 function listenForConnection() {
   if (_web3Provider) {
     console.debug('listenning for connection...');
-    _web3Provider.on('connect', onConnect);
-    _web3Provider.on('disconnect', onDisconnect);
+    _web3Provider.on && _web3Provider.on('connect', onConnect);
+    _web3Provider.on && _web3Provider.on('disconnect', onDisconnect);
   }
 }
 
 function stopListeningForConnection() {
   if (_web3Provider) {
     console.debug('stop listenning for connection...');
-    _web3Provider.removeListener('connect', onConnect);
-    _web3Provider.removeListener('disconnect', onDisconnect);
+    _web3Provider.removeListener && _web3Provider.removeListener('connect', onConnect);
+    _web3Provider.removeListener && _web3Provider.removeListener('disconnect', onDisconnect);
   }
 }
 

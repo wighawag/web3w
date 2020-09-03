@@ -3,6 +3,7 @@ export function getEthereum() {
     if (typeof window !== 'undefined') {
         const windowAsAny = window;
         if (windowAsAny.ethereum) {
+            windowAsAny.ethereum.autoRefreshOnNetworkChange = false;
             return windowAsAny.ethereum;
         }
         else if (windowAsAny.web3) {
