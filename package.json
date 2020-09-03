@@ -1,10 +1,10 @@
 {
   "name": "web3w",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
-  "browser": "dist/umd/index.js",
+  "browser": "dist/amd/index.js",
   "files": [
     "dist/"
   ],
@@ -44,10 +44,10 @@
   "scripts": {
     "prepare": "node .setup.js && node fix_ethers_modules.js && npm run lint && npm run build",
     "dev": "tsc -w -p tsconfig.json",
-    "build-esm": "rimraf dist/esm && tsc -p tsconfig.json",
-    "build-cjs": "rimraf dist/cjs && tsc -p tsconfig-cjs.json && terser-folder dist/cjs -e -x .js -o dist/cjs --config-file terser.json",
-    "build-umd": "rimraf dist/umd && tsc -p tsconfig-umd.json && terser-folder dist/umd -e -x .js -o dist/umd --config-file terser.json",
-    "build": "run-s build-esm build-cjs build-umd",
+    "build:esm": "rimraf dist/esm && tsc -p tsconfig.json",
+    "build:cjs": "rimraf dist/cjs && tsc -p tsconfig-cjs.json",
+    "build:amd": "rimraf dist/amd && tsc -p tsconfig-amd.json && terser-folder dist/amd -e -x .js -o dist/amd --config-file terser.json",
+    "build": "run-s build:esm build:cjs build:amd",
     "lint": "eslint src/**/*.{js,ts,tsx} --quiet --fix"
   },
   "dependencies": {

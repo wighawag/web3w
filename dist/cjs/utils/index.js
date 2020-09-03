@@ -1,1 +1,34 @@
-"use strict";function timeout(e,t,o){return new Promise((r,i)=>{let u=!1;const n=setTimeout(()=>{u=!0,o?"function"==typeof o?r(o()):i(o.error||o):i(new Error("TimedOut"))},e);t.then(e=>{u||(clearTimeout(n),r(e))}).catch(e=>{u||(clearTimeout(n),i(e))})})}Object.defineProperty(exports,"__esModule",{value:!0}),exports.timeout=void 0,exports.timeout=timeout;
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.timeout = void 0;
+function timeout(time, p, config) {
+    return new Promise((resolve, reject) => {
+        let _timedOut = false;
+        const timer = setTimeout(() => {
+            _timedOut = true;
+            if (!config) {
+                reject(new Error('TimedOut'));
+            }
+            else {
+                if (typeof config === 'function') {
+                    resolve(config());
+                }
+                else {
+                    reject(config.error || config);
+                }
+            }
+        }, time);
+        p.then((v) => {
+            if (!_timedOut) {
+                clearTimeout(timer);
+                resolve(v);
+            } // TODO else console.log
+        }).catch((e) => {
+            if (!_timedOut) {
+                clearTimeout(timer);
+                reject(e);
+            } // TODO else console.log
+        });
+    });
+}
+exports.timeout = timeout;

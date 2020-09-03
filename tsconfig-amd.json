@@ -1,8 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "UMD",
-    "outDir": "dist/umd",
+    "module": "AMD",
+    "outDir": "dist/amd",
+    "outFile": "dist/amd/index.js",
     "sourceMap": false // TODO terser
   }
 }
