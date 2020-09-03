@@ -23,14 +23,14 @@ const console = named_logs_1.logs('web3w:index');
 const isBrowser = typeof window != 'undefined';
 const $builtin = {
     state: 'Idle',
-    loading: false,
+    probing: false,
     available: undefined,
     error: undefined,
     vendor: undefined,
 };
 const $balance = {
     state: 'Idle',
-    loading: false,
+    fetching: false,
     stale: undefined,
     amount: undefined,
     error: undefined,
@@ -38,13 +38,14 @@ const $balance = {
 };
 const $chain = {
     state: 'Idle',
-    loading: false,
+    connecting: false,
+    loadingData: false,
     contracts: {},
     error: undefined,
 };
 const $wallet = {
     state: 'Idle',
-    loading: false,
+    connecting: false,
     unlocking: false,
     address: undefined,
     options: undefined,
@@ -125,11 +126,47 @@ function onChainChanged(chainId) {
             chainId = yield providerSend(_web3Provider, 'eth_chainId');
         }
         const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
-        console.debug('onChainChanged', { chainId, chainIdAsDecimal });
+        console.debug('onChainChanged', { chainId, chainIdAsDecimal }); // TODO
+        set(chainStore, {
+            contracts: undefined,
+            addresses: undefined,
+            state: 'Connected',
+            chainId: chainIdAsDecimal,
+            notSupported: undefined,
+        });
+        if ($wallet.address) {
+            yield loadChain(chainIdAsDecimal, $wallet.address);
+        }
     });
 }
+function hasAccountsChanged(accounts) {
+    return accounts[0] !== $wallet.address;
+    // TODO multi account support ?
+}
 function onAccountsChanged(accounts) {
-    console.debug('onAccountsChanged', { accounts });
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!hasAccountsChanged(accounts)) {
+            console.debug('false account changed', accounts);
+            return;
+        }
+        console.debug('onAccountsChanged', { accounts }); // TODO
+        const address = accounts[0];
+        if (address) {
+            set(walletStore, { address, state: 'Ready' });
+            if ($chain.state === 'Connected') {
+                if ($chain.chainId) {
+                    yield loadChain($chain.chainId, address);
+                }
+                else {
+                    throw new Error('no chainId while connected');
+                }
+            }
+        }
+        else {
+            set(walletStore, { address, state: 'Locked' });
+        }
+        // TODO balance
+    });
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function providerSend(provider, method, params) {
@@ -155,6 +192,11 @@ function providerSend(provider, method, params) {
     }
     throw new Error('provider not supported');
 }
+function wait(ms) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 function pollChainChanged(web3Provider, callback) {
     return __awaiter(this, void 0, void 0, function* () {
         while (_listenning) {
@@ -169,14 +211,20 @@ function pollChainChanged(web3Provider, callback) {
                     // TODO error in chain.error
                 }
             }
+            yield wait(3000);
         }
     });
 }
 function pollAccountsChanged(web3Provider, callback) {
     return __awaiter(this, void 0, void 0, function* () {
         while (_listenning) {
-            const accounts = yield providerSend(web3Provider, 'eth_accounts');
-            if (_listenning && accounts[0] !== $wallet.address) {
+            let accounts = [];
+            try {
+                accounts = yield providerSend(web3Provider, 'eth_accounts');
+            }
+            catch (e) { }
+            console.debug({ accounts }); // TODO remove
+            if (_listenning && hasAccountsChanged(accounts)) {
                 // TODO multi account support ?
                 try {
                     callback(accounts);
@@ -186,18 +234,21 @@ function pollAccountsChanged(web3Provider, callback) {
                     // TODO error in wallet.error
                 }
             }
+            yield wait(3000);
         }
     });
 }
-function listenForChanges(address) {
-    if (_web3Provider) {
+function listenForChanges() {
+    if (_web3Provider && !_listenning) {
         _listenning = true;
-        console.debug('listenning for changes...', { address });
         if (_web3Provider.on) {
             _web3Provider.on('chainChanged', onChainChanged);
             _web3Provider.on('accountsChanged', onAccountsChanged);
+            // still poll has accountsChanged does not seem to be triggered all the time (metamask bug?)
+            pollAccountsChanged(_web3Provider, onAccountsChanged);
         }
         else {
+            // TODO handle race condition : should not double poll
             pollChainChanged(_web3Provider, onChainChanged);
             pollAccountsChanged(_web3Provider, onAccountsChanged);
         }
@@ -205,7 +256,7 @@ function listenForChanges(address) {
 }
 function stopListeningForChanges() {
     _listenning = false;
-    if (_web3Provider) {
+    if (_web3Provider && _listenning) {
         console.debug('stop listenning for changes...');
         _web3Provider.removeListener && _web3Provider.removeListener('chainChanged', onChainChanged);
         _web3Provider.removeListener && _web3Provider.removeListener('accountsChanged', onAccountsChanged);
@@ -213,10 +264,10 @@ function stopListeningForChanges() {
 }
 function onConnect({ chainId }) {
     const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
-    console.debug('onConnect', { chainId, chainIdAsDecimal });
+    console.debug('onConnect', { chainId, chainIdAsDecimal }); // TODO
 }
 function onDisconnect(error) {
-    console.debug('onDisconnect', { error });
+    console.debug('onDisconnect', { error }); // TODO
 }
 function listenForConnection() {
     if (_web3Provider) {
@@ -322,17 +373,49 @@ function setupChain(address) {
             };
             set(chainStore, {
                 error,
-                loading: false,
+                connecting: false,
+                loadingData: false,
+                contracts: undefined,
+                addresses: undefined,
                 state: 'Idle',
             });
             throw new Error(error.message);
         }
-        set(chainStore, { loading: true });
+        set(chainStore, { connecting: true });
+        const { chainId: chainIdAsNumber } = yield _ethersProvider.getNetwork();
+        const chainId = String(chainIdAsNumber);
+        set(chainStore, {
+            chainId,
+            connecting: false,
+            loadingData: false,
+            contracts: undefined,
+            addresses: undefined,
+            state: 'Connected',
+        });
+        yield loadChain(chainId, address);
+    });
+}
+function loadChain(chainId, address) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (_ethersProvider === undefined) {
+            const error = {
+                code: errors_1.CHAIN_NO_PROVIDER,
+                message: `no provider setup yet`,
+            };
+            set(chainStore, {
+                error,
+                connecting: false,
+                loadingData: false,
+                contracts: undefined,
+                addresses: undefined,
+                state: 'Idle',
+            });
+            throw new Error(error.message);
+        }
+        set(chainStore, { loadingData: true });
         const contractsToAdd = {};
         const addresses = {};
         let contractsInfos = {};
-        const { chainId: chainIdAsNumber } = yield _ethersProvider.getNetwork();
-        const chainId = String(chainIdAsNumber);
         let chainConfigs = _chainConfigs;
         if (typeof chainConfigs === 'function') {
             chainConfigs = yield chainConfigs(chainId);
@@ -352,10 +435,11 @@ function setupChain(address) {
                         error,
                         chainId,
                         notSupported: true,
-                        loading: false,
-                        state: 'Idle',
+                        connecting: false,
+                        loadingData: false,
+                        state: 'Connected',
                     });
-                    throw new Error(error.message);
+                    throw new Error(error.message); // TODO remove ?
                 }
             }
             else {
@@ -367,10 +451,11 @@ function setupChain(address) {
                         error,
                         chainId,
                         notSupported: true,
-                        loading: false,
-                        state: 'Idle',
+                        connecting: false,
+                        loadingData: false,
+                        state: 'Connected',
                     });
-                    throw new Error(error.message);
+                    throw new Error(error.message); // TODO remove ?
                 }
                 else {
                     contractsInfos = chainConfig.contracts;
@@ -386,7 +471,8 @@ function setupChain(address) {
         }
         set(chainStore, {
             state: 'Ready',
-            loading: undefined,
+            loadingData: false,
+            connecting: false,
             chainId,
             addresses,
             contracts: contractsToAdd,
@@ -420,7 +506,7 @@ function select(type, moduleConfig) {
         } // TODO other type: check if module registered
         set(walletStore, {
             address: undefined,
-            loading: true,
+            connecting: true,
             selected: type,
             state: 'Idle',
             error: undefined,
@@ -453,7 +539,7 @@ function select(type, moduleConfig) {
                 set(walletStore, {
                     error: { message, code: 1 },
                     selected: undefined,
-                    loading: false,
+                    connecting: false,
                 }); // TODO code
                 throw new Error(message);
             }
@@ -465,13 +551,13 @@ function select(type, moduleConfig) {
             }
             catch (e) {
                 if (e.message === 'USER_CANCELED') {
-                    set(walletStore, { loading: false, selected: undefined });
+                    set(walletStore, { connecting: false, selected: undefined });
                 }
                 else {
                     set(walletStore, {
                         error: { code: errors_1.MODULE_ERROR, message: e.message },
                         selected: undefined,
-                        loading: false,
+                        connecting: false,
                     });
                 }
                 throw e;
@@ -482,7 +568,7 @@ function select(type, moduleConfig) {
             set(walletStore, {
                 error: { message, code: 1 },
                 selected: undefined,
-                loading: false,
+                connecting: false,
             }); // TODO code
             throw new Error(message);
         }
@@ -500,7 +586,7 @@ function select(type, moduleConfig) {
             }
         }
         catch (e) {
-            set(walletStore, { error: e, selected: undefined, loading: false });
+            set(walletStore, { error: e, selected: undefined, connecting: false });
             throw e;
         }
         // console.debug({accounts});
@@ -510,16 +596,17 @@ function select(type, moduleConfig) {
             set(walletStore, {
                 address,
                 state: 'Ready',
-                loading: undefined,
+                connecting: undefined,
             });
-            listenForChanges(address);
+            listenForChanges();
             yield setupChain(address);
         }
         else {
+            listenForChanges();
             set(walletStore, {
                 address: undefined,
                 state: 'Locked',
-                loading: undefined,
+                connecting: undefined,
             });
         }
     });
@@ -533,17 +620,18 @@ function probeBuiltin() {
         if ($builtin.state === 'Ready') {
             return resolve();
         }
-        set(builtinStore, { loading: true });
+        set(builtinStore, { probing: true });
         try {
             const ethereum = yield builtin_1.fetchEthereum();
             if (ethereum) {
+                ethereum.autoRefreshOnNetworkChange = false;
                 _builtinWeb3Provider = ethereum;
                 _builtinEthersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(ethereum), _observers);
                 set(builtinStore, {
                     state: 'Ready',
                     vendor: builtin_1.getVendor(ethereum),
                     available: true,
-                    loading: undefined,
+                    probing: false,
                 });
             }
             else {
@@ -551,7 +639,7 @@ function probeBuiltin() {
                     state: 'Ready',
                     vendor: undefined,
                     available: false,
-                    loading: undefined,
+                    probing: false,
                 });
             }
         }
@@ -560,7 +648,7 @@ function probeBuiltin() {
                 error: e.message || e,
                 vendor: undefined,
                 available: undefined,
-                loading: false,
+                probing: false,
             });
             return reject(e);
         }
@@ -607,7 +695,7 @@ function logout() {
         set(walletStore, {
             state: 'Idle',
             address: undefined,
-            loading: false,
+            connecting: false,
             unlocking: undefined,
             selected: undefined,
             error: undefined,

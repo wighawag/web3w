@@ -126,19 +126,20 @@ declare module "index" {
     import { BigNumber } from '@ethersproject/bignumber';
     import { Readable } from "utils/internals";
     type Base = {
-        loading: boolean;
         error?: {
             code: number;
             message: string;
         };
     };
     type BalanceData = Base & {
+        fetching: boolean;
         state: 'Idle' | 'Ready';
         stale?: boolean;
         amount?: BigNumber;
         blockNumber?: number;
     };
     type BuiltinData = Base & {
+        probing: boolean;
         state: 'Idle' | 'Ready';
         available?: boolean;
         vendor?: string;
@@ -147,7 +148,9 @@ declare module "index" {
         [name: string]: Contract;
     };
     type ChainData = Base & {
-        state: 'Idle' | 'Ready';
+        connecting: boolean;
+        loadingData: boolean;
+        state: 'Idle' | 'Connected' | 'Ready';
         chainId?: string;
         addresses?: {
             [name: string]: string;
@@ -156,6 +159,7 @@ declare module "index" {
         notSupported?: boolean;
     };
     type WalletData = Base & {
+        connecting: boolean;
         state: 'Idle' | 'Locked' | 'Ready';
         unlocking: boolean;
         address?: string;

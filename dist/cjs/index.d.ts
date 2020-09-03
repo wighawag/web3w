@@ -3,19 +3,20 @@ import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
 import { BigNumber } from '@ethersproject/bignumber';
 import { Readable } from './utils/internals';
 declare type Base = {
-    loading: boolean;
     error?: {
         code: number;
         message: string;
     };
 };
 declare type BalanceData = Base & {
+    fetching: boolean;
     state: 'Idle' | 'Ready';
     stale?: boolean;
     amount?: BigNumber;
     blockNumber?: number;
 };
 declare type BuiltinData = Base & {
+    probing: boolean;
     state: 'Idle' | 'Ready';
     available?: boolean;
     vendor?: string;
@@ -24,7 +25,9 @@ declare type Contracts = {
     [name: string]: Contract;
 };
 declare type ChainData = Base & {
-    state: 'Idle' | 'Ready';
+    connecting: boolean;
+    loadingData: boolean;
+    state: 'Idle' | 'Connected' | 'Ready';
     chainId?: string;
     addresses?: {
         [name: string]: string;
@@ -33,6 +36,7 @@ declare type ChainData = Base & {
     notSupported?: boolean;
 };
 declare type WalletData = Base & {
+    connecting: boolean;
     state: 'Idle' | 'Locked' | 'Ready';
     unlocking: boolean;
     address?: string;

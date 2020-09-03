@@ -20,11 +20,11 @@ import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR} from './err
 const console = logs('web3w:index');
 
 type Base = {
-  loading: boolean;
   error?: {code: number; message: string};
 };
 
 type BalanceData = Base & {
+  fetching: boolean;
   state: 'Idle' | 'Ready';
   stale?: boolean;
   amount?: BigNumber;
@@ -32,6 +32,7 @@ type BalanceData = Base & {
 };
 
 type BuiltinData = Base & {
+  probing: boolean;
   state: 'Idle' | 'Ready';
   available?: boolean;
   vendor?: string;
@@ -40,6 +41,8 @@ type BuiltinData = Base & {
 type Contracts = {[name: string]: Contract};
 
 type ChainData = Base & {
+  connecting: boolean;
+  loadingData: boolean;
   state: 'Idle' | 'Connected' | 'Ready';
   chainId?: string;
   addresses?: {[name: string]: string};
@@ -48,6 +51,7 @@ type ChainData = Base & {
 };
 
 type WalletData = Base & {
+  connecting: boolean;
   state: 'Idle' | 'Locked' | 'Ready';
   unlocking: boolean;
   address?: string;
@@ -119,7 +123,7 @@ const isBrowser = typeof window != 'undefined';
 
 const $builtin: BuiltinData = {
   state: 'Idle', // Idle | Ready
-  loading: false,
+  probing: false,
   available: undefined,
   error: undefined,
   vendor: undefined,
@@ -127,7 +131,7 @@ const $builtin: BuiltinData = {
 
 const $balance: BalanceData = {
   state: 'Idle',
-  loading: false,
+  fetching: false,
   stale: undefined,
   amount: undefined,
   error: undefined,
@@ -136,7 +140,8 @@ const $balance: BalanceData = {
 
 const $chain: ChainData = {
   state: 'Idle',
-  loading: false,
+  connecting: false,
+  loadingData: false,
   contracts: {},
   error: undefined,
 };
@@ -149,7 +154,7 @@ interface ProviderRpcError extends Error {
 
 const $wallet: WalletData = {
   state: 'Idle', // Idle | Locked | Ready
-  loading: false,
+  connecting: false,
   unlocking: false,
   address: undefined,
   options: undefined, // wallet Types available
@@ -242,12 +247,35 @@ async function onChainChanged(chainId: string) {
     chainId: chainIdAsDecimal,
     notSupported: undefined,
   });
-  // TODO load
+  if ($wallet.address) {
+    await loadChain(chainIdAsDecimal, $wallet.address);
+  }
 }
 
-function onAccountsChanged(accounts: string[]) {
+function hasAccountsChanged(accounts: string[]): boolean {
+  return accounts[0] !== $wallet.address;
+  // TODO multi account support ?
+}
+
+async function onAccountsChanged(accounts: string[]) {
+  if (!hasAccountsChanged(accounts)) {
+    console.debug('false account changed', accounts);
+    return;
+  }
   console.debug('onAccountsChanged', {accounts}); // TODO
-  set(walletStore, {address: accounts[0]});
+  const address = accounts[0];
+  if (address) {
+    set(walletStore, {address, state: 'Ready'});
+    if ($chain.state === 'Connected') {
+      if ($chain.chainId) {
+        await loadChain($chain.chainId, address);
+      } else {
+        throw new Error('no chainId while connected');
+      }
+    }
+  } else {
+    set(walletStore, {address, state: 'Locked'});
+  }
   // TODO balance
 }
 
@@ -297,8 +325,13 @@ async function pollChainChanged(web3Provider: WindowWeb3Provider, callback: (cha
 
 async function pollAccountsChanged(web3Provider: WindowWeb3Provider, callback: (accounts: string[]) => void) {
   while (_listenning) {
-    const accounts: string[] = await providerSend(web3Provider, 'eth_accounts');
-    if (_listenning && accounts[0] !== $wallet.address) {
+    let accounts: string[] = [];
+    try {
+      accounts = await providerSend(web3Provider, 'eth_accounts');
+    } catch (e) {}
+
+    console.debug({accounts}); // TODO remove
+    if (_listenning && hasAccountsChanged(accounts)) {
       // TODO multi account support ?
       try {
         callback(accounts);
@@ -311,14 +344,16 @@ async function pollAccountsChanged(web3Provider: WindowWeb3Provider, callback: (
   }
 }
 
-function listenForChanges(address: string) {
-  if (_web3Provider) {
+function listenForChanges() {
+  if (_web3Provider && !_listenning) {
     _listenning = true;
-    console.debug('listenning for changes...', {address});
     if (_web3Provider.on) {
       _web3Provider.on('chainChanged', onChainChanged);
       _web3Provider.on('accountsChanged', onAccountsChanged);
+      // still poll has accountsChanged does not seem to be triggered all the time (metamask bug?)
+      pollAccountsChanged(_web3Provider, onAccountsChanged);
     } else {
+      // TODO handle race condition : should not double poll
       pollChainChanged(_web3Provider, onChainChanged);
       pollAccountsChanged(_web3Provider, onAccountsChanged);
     }
@@ -327,7 +362,7 @@ function listenForChanges(address: string) {
 
 function stopListeningForChanges() {
   _listenning = false;
-  if (_web3Provider) {
+  if (_web3Provider && _listenning) {
     console.debug('stop listenning for changes...');
     _web3Provider.removeListener && _web3Provider.removeListener('chainChanged', onChainChanged);
     _web3Provider.removeListener && _web3Provider.removeListener('accountsChanged', onAccountsChanged);
@@ -486,17 +521,48 @@ async function setupChain(address: string) {
     };
     set(chainStore, {
       error,
-      loading: false,
+      connecting: false,
+      loadingData: false,
+      contracts: undefined,
+      addresses: undefined,
       state: 'Idle',
     });
     throw new Error(error.message);
   }
-  set(chainStore, {loading: true});
+  set(chainStore, {connecting: true});
+  const {chainId: chainIdAsNumber} = await _ethersProvider.getNetwork();
+  const chainId = String(chainIdAsNumber);
+  set(chainStore, {
+    chainId,
+    connecting: false,
+    loadingData: false,
+    contracts: undefined,
+    addresses: undefined,
+    state: 'Connected',
+  });
+  await loadChain(chainId, address);
+}
+
+async function loadChain(chainId: string, address: string): Promise<void> {
+  if (_ethersProvider === undefined) {
+    const error = {
+      code: CHAIN_NO_PROVIDER,
+      message: `no provider setup yet`,
+    };
+    set(chainStore, {
+      error,
+      connecting: false,
+      loadingData: false,
+      contracts: undefined,
+      addresses: undefined,
+      state: 'Idle',
+    });
+    throw new Error(error.message);
+  }
+  set(chainStore, {loadingData: true});
   const contractsToAdd: {[name: string]: Contract} = {};
   const addresses: {[name: string]: string} = {};
   let contractsInfos: ContractsInfos = {};
-  const {chainId: chainIdAsNumber} = await _ethersProvider.getNetwork();
-  const chainId = String(chainIdAsNumber);
   let chainConfigs = _chainConfigs;
   if (typeof chainConfigs === 'function') {
     chainConfigs = await chainConfigs(chainId);
@@ -515,10 +581,11 @@ async function setupChain(address: string) {
           error,
           chainId,
           notSupported: true,
-          loading: false,
-          state: 'Idle',
+          connecting: false,
+          loadingData: false,
+          state: 'Connected',
         });
-        throw new Error(error.message);
+        throw new Error(error.message); // TODO remove ?
       }
     } else {
       const multichainConfigs = chainConfigs as MultiChainConfigs;
@@ -529,10 +596,11 @@ async function setupChain(address: string) {
           error,
           chainId,
           notSupported: true,
-          loading: false,
-          state: 'Idle',
+          connecting: false,
+          loadingData: false,
+          state: 'Connected',
         });
-        throw new Error(error.message);
+        throw new Error(error.message); // TODO remove ?
       } else {
         contractsInfos = chainConfig.contracts;
       }
@@ -551,7 +619,8 @@ async function setupChain(address: string) {
   }
   set(chainStore, {
     state: 'Ready',
-    loading: undefined,
+    loadingData: false,
+    connecting: false,
     chainId,
     addresses,
     contracts: contractsToAdd,
@@ -585,7 +654,7 @@ async function select(type: string, moduleConfig?: any) {
 
   set(walletStore, {
     address: undefined,
-    loading: true,
+    connecting: true,
     selected: type,
     state: 'Idle',
     error: undefined,
@@ -617,7 +686,7 @@ async function select(type: string, moduleConfig?: any) {
       set(walletStore, {
         error: {message, code: 1},
         selected: undefined,
-        loading: false,
+        connecting: false,
       }); // TODO code
       throw new Error(message);
     }
@@ -629,12 +698,12 @@ async function select(type: string, moduleConfig?: any) {
       _currentModule = module;
     } catch (e) {
       if (e.message === 'USER_CANCELED') {
-        set(walletStore, {loading: false, selected: undefined});
+        set(walletStore, {connecting: false, selected: undefined});
       } else {
         set(walletStore, {
           error: {code: MODULE_ERROR, message: e.message},
           selected: undefined,
-          loading: false,
+          connecting: false,
         });
       }
       throw e;
@@ -646,7 +715,7 @@ async function select(type: string, moduleConfig?: any) {
     set(walletStore, {
       error: {message, code: 1},
       selected: undefined,
-      loading: false,
+      connecting: false,
     }); // TODO code
     throw new Error(message);
   }
@@ -664,7 +733,7 @@ async function select(type: string, moduleConfig?: any) {
       accounts = await timeout(20000, _ethersProvider.listAccounts());
     }
   } catch (e) {
-    set(walletStore, {error: e, selected: undefined, loading: false});
+    set(walletStore, {error: e, selected: undefined, connecting: false});
     throw e;
   }
   // console.debug({accounts});
@@ -674,15 +743,16 @@ async function select(type: string, moduleConfig?: any) {
     set(walletStore, {
       address,
       state: 'Ready',
-      loading: undefined,
+      connecting: undefined,
     });
-    listenForChanges(address);
+    listenForChanges();
     await setupChain(address);
   } else {
+    listenForChanges();
     set(walletStore, {
       address: undefined,
       state: 'Locked',
-      loading: undefined,
+      connecting: undefined,
     });
   }
 }
@@ -696,24 +766,25 @@ function probeBuiltin() {
     if ($builtin.state === 'Ready') {
       return resolve();
     }
-    set(builtinStore, {loading: true});
+    set(builtinStore, {probing: true});
     try {
       const ethereum = await fetchEthereum();
       if (ethereum) {
+        ethereum.autoRefreshOnNetworkChange = false;
         _builtinWeb3Provider = ethereum;
         _builtinEthersProvider = proxyWeb3Provider(new Web3Provider(ethereum), _observers);
         set(builtinStore, {
           state: 'Ready',
           vendor: getVendor(ethereum),
           available: true,
-          loading: undefined,
+          probing: false,
         });
       } else {
         set(builtinStore, {
           state: 'Ready',
           vendor: undefined,
           available: false,
-          loading: undefined,
+          probing: false,
         });
       }
     } catch (e) {
@@ -721,7 +792,7 @@ function probeBuiltin() {
         error: e.message || e,
         vendor: undefined,
         available: undefined,
-        loading: false,
+        probing: false,
       });
       return reject(e);
     }
@@ -768,7 +839,7 @@ async function logout() {
   set(walletStore, {
     state: 'Idle',
     address: undefined,
-    loading: false,
+    connecting: false,
     unlocking: undefined,
     selected: undefined,
     error: undefined,
