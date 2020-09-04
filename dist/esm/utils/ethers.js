@@ -110,7 +110,8 @@ export function proxyContract(contractToProxy, name, observers) {
             else if (prop === 'toJSON') {
                 return () => ({
                     address: contractToProxy.address,
-                    abi: contractToProxy.interface.fragments.map((f) => {
+                    abi: contractToProxy.interface.fragments,
+                    functionsSignatures: contractToProxy.interface.fragments.map((f) => {
                         return f.format('full');
                     }),
                 });
