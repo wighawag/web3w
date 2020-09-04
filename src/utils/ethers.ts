@@ -138,11 +138,17 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
         return proxyCall(contractToProxy.functions, prop);
       } else if (prop === '_proxiedContract') {
         return contractToProxy;
+      } else if (prop === 'connect') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (signer: any) => {
+          return proxyContract(contractToProxy.connect(signer), name, observers);
+        };
       } else if (prop === 'toJSON') {
-        // TODO test
         return () => ({
           address: contractToProxy.address,
-          abi: contractToProxy.interface.fragments,
+          abi: contractToProxy.interface.fragments.map((f) => {
+            return f.format('full');
+          }),
         });
       } else {
         return obj[prop]; // TODO prototype access ?

@@ -16,7 +16,7 @@ import { fetchEthereum, getVendor } from './utils/builtin';
 import { timeout } from './utils/index.js';
 import { proxyContract, proxyWeb3Provider } from './utils/ethers';
 import { logs } from 'named-logs';
-import { CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR } from './errors';
+import { CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET } from './errors';
 const console = logs('web3w:index');
 const isBrowser = typeof window != 'undefined';
 const $builtin = {
@@ -159,9 +159,13 @@ function onAccountsChanged(accounts) {
                     throw new Error('no chainId while connected');
                 }
             }
+            else {
+                reAssignContracts(address);
+            }
         }
         else {
             set(walletStore, { address, state: 'Locked' });
+            reAssignContracts(address);
         }
         // TODO balance
     });
@@ -364,10 +368,47 @@ function fetchPreviousSelection() {
 }
 function setupChain(address) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (_ethersProvider === undefined) {
+        const ethersProvider = ensureEthersProvider();
+        let chainId;
+        if ($chain.state === 'Idle') {
+            set(chainStore, { connecting: true });
+            let chainIdAsNumber;
+            try {
+                const netResult = yield ethersProvider.getNetwork();
+                chainIdAsNumber = netResult.chainId;
+            }
+            catch (e) {
+                const error = {
+                    code: CHAIN_ID_FAILED,
+                    message: `Failed to fetch chainId`,
+                };
+                set(chainStore, {
+                    error,
+                    connecting: false,
+                    loadingData: false,
+                    contracts: undefined,
+                    addresses: undefined,
+                    state: 'Idle',
+                });
+                throw new Error(error.message);
+            }
+            chainId = String(chainIdAsNumber);
+            set(chainStore, {
+                chainId,
+                connecting: false,
+                loadingData: false,
+                contracts: undefined,
+                addresses: undefined,
+                state: 'Connected',
+            });
+        }
+        else {
+            chainId = $chain.chainId;
+        }
+        if (!chainId) {
             const error = {
-                code: CHAIN_NO_PROVIDER,
-                message: `no provider setup yet`,
+                code: CHAIN_ID_NOT_SET,
+                message: `chainId is not set even though chain is connected`,
             };
             set(chainStore, {
                 error,
@@ -379,37 +420,12 @@ function setupChain(address) {
             });
             throw new Error(error.message);
         }
-        set(chainStore, { connecting: true });
-        const { chainId: chainIdAsNumber } = yield _ethersProvider.getNetwork();
-        const chainId = String(chainIdAsNumber);
-        set(chainStore, {
-            chainId,
-            connecting: false,
-            loadingData: false,
-            contracts: undefined,
-            addresses: undefined,
-            state: 'Connected',
-        });
         yield loadChain(chainId, address);
     });
 }
 function loadChain(chainId, address) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (_ethersProvider === undefined) {
-            const error = {
-                code: CHAIN_NO_PROVIDER,
-                message: `no provider setup yet`,
-            };
-            set(chainStore, {
-                error,
-                connecting: false,
-                loadingData: false,
-                contracts: undefined,
-                addresses: undefined,
-                state: 'Idle',
-            });
-            throw new Error(error.message);
-        }
+        const ethersProvider = ensureEthersProvider();
         set(chainStore, { loadingData: true });
         const contractsToAdd = {};
         const addresses = {};
@@ -462,7 +478,7 @@ function loadChain(chainId, address) {
             for (const contractName of Object.keys(contractsInfos)) {
                 const contractInfo = contractsInfos[contractName];
                 if (contractInfo.abi) {
-                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, _ethersProvider.getSigner(address)), contractName, _observers);
+                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)), contractName, _observers);
                 }
                 addresses[contractName] = contractInfo.address;
             }
@@ -476,6 +492,34 @@ function loadChain(chainId, address) {
             contracts: contractsToAdd,
         }); // TODO None ?
     });
+}
+function ensureEthersProvider() {
+    if (_ethersProvider === undefined) {
+        const error = {
+            code: CHAIN_NO_PROVIDER,
+            message: `no provider setup yet`,
+        };
+        set(chainStore, {
+            error,
+            connecting: false,
+            loadingData: false,
+            contracts: undefined,
+            addresses: undefined,
+            state: 'Idle',
+        });
+        throw new Error(error.message);
+    }
+    return _ethersProvider;
+}
+function reAssignContracts(address) {
+    const ethersProvider = ensureEthersProvider();
+    const contracts = $chain.contracts;
+    if (!contracts) {
+        return;
+    }
+    for (const contractName of Object.keys(contracts)) {
+        contracts[contractName] = contracts[contractName].connect(address ? ethersProvider.getSigner(address) : ethersProvider);
+    }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function select(type, moduleConfig) {
@@ -706,6 +750,7 @@ function logout() {
         });
         set(chainStore, {
             contracts: undefined,
+            addresses: undefined,
             state: 'Idle',
             notSupported: undefined,
             chainId: undefined,
@@ -764,6 +809,9 @@ function unlock() {
 // /////////////////////////////////////////////////////////////////////////////////
 export default (config) => {
     config = Object.assign({}, (config || {}));
+    if (!config.options || config.options.length === 0) {
+        config.options = ['builtin'];
+    }
     config.builtin = config.builtin || { autoProbe: false };
     const { debug, chainConfigs, builtin } = config;
     _chainConfigs = chainConfigs;
@@ -773,7 +821,7 @@ export default (config) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         window.$transactions = $transactions;
     }
-    _options = config.options || [];
+    _options = config.options;
     set(walletStore, {
         state: 'Idle',
         options: _options.map((m) => {
