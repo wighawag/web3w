@@ -19,11 +19,11 @@ import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FA
 
 const console = logs('web3w:index');
 
-type Base = {
+type BaseData = {
   error?: {code: number; message: string};
 };
 
-export type BalanceData = Base & {
+export type BalanceData = BaseData & {
   fetching: boolean;
   state: 'Idle' | 'Ready';
   stale?: boolean;
@@ -31,7 +31,7 @@ export type BalanceData = Base & {
   blockNumber?: number;
 };
 
-export type BuiltinData = Base & {
+export type BuiltinData = BaseData & {
   probing: boolean;
   state: 'Idle' | 'Ready';
   available?: boolean;
@@ -40,7 +40,7 @@ export type BuiltinData = Base & {
 
 type Contracts = {[name: string]: Contract};
 
-export type ChainData = Base & {
+export type ChainData = BaseData & {
   connecting: boolean;
   loadingData: boolean;
   state: 'Idle' | 'Connected' | 'Ready';
@@ -50,7 +50,7 @@ export type ChainData = Base & {
   notSupported?: boolean;
 };
 
-export type WalletData = Base & {
+export type WalletData = BaseData & {
   connecting: boolean;
   state: 'Idle' | 'Locked' | 'Ready';
   unlocking: boolean;
@@ -63,7 +63,7 @@ export type WalletData = Base & {
 export type WalletStore = Readable<WalletData> & {
   connect: typeof connect;
   unlock: typeof unlock;
-  acknowledgeError: typeof acknowledgeError;
+  acknowledgeError: () => void;
   logout: typeof logout;
   readonly options: string[];
   readonly address: string | undefined;
@@ -76,10 +76,15 @@ export type WalletStore = Readable<WalletData> & {
 
 export type BuiltinStore = Readable<BuiltinData> & {
   probe: () => Promise<WindowWeb3Provider>;
+  acknowledgeError: () => void;
 };
 
-export type ChainStore = Readable<ChainData>;
-export type BalanceStore = Readable<BalanceData>;
+export type ChainStore = Readable<ChainData> & {
+  acknowledgeError: () => void;
+};
+export type BalanceStore = Readable<BalanceData> & {
+  acknowledgeError: () => void;
+};
 export type TransactionStore = Readable<TransactionRecord[]>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -894,14 +899,10 @@ async function connect(type: string, moduleConfig?: unknown) {
   return true;
 }
 
-function acknowledgeError(field: string) {
-  if (!field) {
-    // TODO think more
-  } else if (field === 'builtin') {
-    // TODO
-  }
-  // TODO other:
-  logout();
+function acknowledgeError<T extends BaseData>(store: WritableWithData<T>): () => void {
+  return () => {
+    set(store, {error: undefined});
+  };
 }
 
 async function logout() {
@@ -1047,19 +1048,22 @@ export default (
     },
     balance: {
       subscribe: balanceStore.subscribe,
+      acknowledgeError: acknowledgeError(balanceStore),
     },
     chain: {
       subscribe: chainStore.subscribe,
+      acknowledgeError: acknowledgeError(chainStore),
     },
     builtin: {
       subscribe: builtinStore.subscribe,
+      acknowledgeError: acknowledgeError(builtinStore),
       probe: probeBuiltin,
     },
     wallet: {
       subscribe: walletStore.subscribe,
       connect,
       unlock,
-      acknowledgeError,
+      acknowledgeError: acknowledgeError(walletStore),
       logout,
       get options() {
         return $wallet.options;

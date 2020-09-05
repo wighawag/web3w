@@ -719,15 +719,10 @@ function connect(type, moduleConfig) {
         return true;
     });
 }
-function acknowledgeError(field) {
-    if (!field) {
-        // TODO think more
-    }
-    else if (field === 'builtin') {
-        // TODO
-    }
-    // TODO other:
-    logout();
+function acknowledgeError(store) {
+    return () => {
+        set(store, { error: undefined });
+    };
 }
 function logout() {
     return __awaiter(this, void 0, void 0, function* () {
@@ -863,19 +858,22 @@ export default (config) => {
         },
         balance: {
             subscribe: balanceStore.subscribe,
+            acknowledgeError: acknowledgeError(balanceStore),
         },
         chain: {
             subscribe: chainStore.subscribe,
+            acknowledgeError: acknowledgeError(chainStore),
         },
         builtin: {
             subscribe: builtinStore.subscribe,
+            acknowledgeError: acknowledgeError(builtinStore),
             probe: probeBuiltin,
         },
         wallet: {
             subscribe: walletStore.subscribe,
             connect,
             unlock,
-            acknowledgeError,
+            acknowledgeError: acknowledgeError(walletStore),
             logout,
             get options() {
                 return $wallet.options;
