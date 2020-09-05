@@ -51,6 +51,9 @@ const $wallet = {
     pendingUserConfirmation: undefined,
     error: undefined,
 };
+const $flow = {
+    requestingContracts: false,
+};
 function store(data) {
     const result = writable(data);
     result.data = data;
@@ -62,6 +65,7 @@ const transactionsStore = store($transactions);
 const builtinStore = store($builtin);
 const chainStore = store($chain);
 const balanceStore = store($balance);
+const flowStore = store($flow);
 function addTransaction(tx) {
     $transactions.push(tx);
     transactionsStore.set($transactions);
@@ -113,6 +117,9 @@ let _builtinWeb3Provider;
 let _chainConfigs;
 let _currentModule;
 let _options;
+let _flowPromise;
+let _flowResolve;
+let _flowReject;
 function onChainChanged(chainId) {
     return __awaiter(this, void 0, void 0, function* () {
         if (chainId === '0xNaN') {
@@ -490,6 +497,13 @@ function loadChain(chainId, address, newProviderRequired) {
             addresses,
             contracts: contractsToAdd,
         }); // TODO None ?
+        if ($wallet.state === 'Ready') {
+            set(flowStore, { requestingContracts: false });
+            _flowResolve && _flowResolve(contractsToAdd);
+            _flowPromise = undefined;
+            _flowReject = undefined;
+            _flowResolve = undefined;
+        }
     });
 }
 function ensureEthersProvider(newProviderRequired) {
@@ -811,6 +825,7 @@ export default (config) => {
         config.options = ['builtin'];
     }
     config.builtin = config.builtin || { autoProbe: false };
+    config.flow = config.flow || { autoSelect: false };
     const { debug, chainConfigs, builtin } = config;
     _chainConfigs = chainConfigs;
     if (debug && typeof window !== 'undefined') {
@@ -895,6 +910,51 @@ export default (config) => {
             },
             get balance() {
                 return $balance.amount;
+            },
+        },
+        flow: {
+            subscribe: flowStore.subscribe,
+            ensureContractsAreReady() {
+                if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
+                    console.log('READY');
+                    _flowReject = undefined;
+                    _flowResolve = undefined;
+                    if (!$chain.contracts) {
+                        return Promise.reject('contracts not set');
+                    }
+                    else {
+                        return Promise.resolve($chain.contracts);
+                    }
+                }
+                if (_flowPromise) {
+                    console.log('promise waiting...');
+                    return _flowPromise;
+                }
+                console.log('requestin contracts...');
+                set(flowStore, { requestingContracts: true });
+                _flowPromise = new Promise((resolve, reject) => {
+                    _flowResolve = resolve;
+                    _flowReject = reject;
+                });
+                if (config.flow && config.flow.autoSelect && $wallet.options.length === 1) {
+                    connect($wallet.options[0]).catch((error) => {
+                        _flowReject && _flowReject(error);
+                        _flowPromise = undefined;
+                        _flowReject = undefined;
+                        _flowResolve = undefined;
+                    });
+                }
+                return _flowPromise;
+            },
+            cancel() {
+                console.log('canceling...');
+                if (_flowReject) {
+                    _flowReject({ code: 1, message: 'Cancel' });
+                }
+                _flowPromise = undefined;
+                _flowReject = undefined;
+                _flowResolve = undefined;
+                set(flowStore, { requestingContracts: false });
             },
         },
     };

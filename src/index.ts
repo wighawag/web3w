@@ -19,8 +19,10 @@ import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FA
 
 const console = logs('web3w:index');
 
+type ErrorData = {code: number; message: string};
+
 type BaseData = {
-  error?: {code: number; message: string};
+  error?: ErrorData;
 };
 
 export type BalanceData = BaseData & {
@@ -72,6 +74,11 @@ export type WalletStore = Readable<WalletData> & {
   readonly chain: ChainData;
   readonly contracts: Contracts | undefined;
   readonly balance: BigNumber | undefined;
+};
+
+export type FlowStore = Readable<{requestingContracts: boolean}> & {
+  ensureContractsAreReady(): Promise<Contracts>;
+  cancel(): void;
 };
 
 export type BuiltinStore = Readable<BuiltinData> & {
@@ -145,6 +152,7 @@ type TransactionRecord = {
 
 export type Web3wConfig = {
   builtin?: BuiltinConfig;
+  flow?: {autoSelect?: boolean};
   debug?: boolean;
   chainConfigs: ChainConfigs;
   options?: ModuleOptions;
@@ -195,6 +203,10 @@ const $wallet: WalletData = {
   error: undefined,
 };
 
+const $flow: {requestingContracts: boolean} = {
+  requestingContracts: false,
+};
+
 function store<T>(data: T): WritableWithData<T> {
   const result = writable(data) as WritableWithData<T>;
   result.data = data;
@@ -207,6 +219,7 @@ const transactionsStore = store($transactions);
 const builtinStore = store($builtin);
 const chainStore = store($chain);
 const balanceStore = store($balance);
+const flowStore = store($flow);
 
 function addTransaction(tx: TransactionRecord) {
   $transactions.push(tx);
@@ -260,6 +273,10 @@ let _builtinWeb3Provider: WindowWeb3Provider | undefined;
 let _chainConfigs: ChainConfigs;
 let _currentModule: Module | undefined;
 let _options: ModuleOptions;
+
+let _flowPromise: Promise<Contracts> | undefined;
+let _flowResolve: ((val: Contracts) => void) | undefined;
+let _flowReject: ((err: ErrorData) => void) | undefined;
 
 async function onChainChanged(chainId: string) {
   if (chainId === '0xNaN') {
@@ -670,6 +687,14 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
     addresses,
     contracts: contractsToAdd,
   }); // TODO None ?
+
+  if ($wallet.state === 'Ready') {
+    set(flowStore, {requestingContracts: false});
+    _flowResolve && _flowResolve(contractsToAdd);
+    _flowPromise = undefined;
+    _flowReject = undefined;
+    _flowResolve = undefined;
+  }
 }
 
 function ensureEthersProvider(newProviderRequired: boolean): JsonRpcProvider {
@@ -991,12 +1016,14 @@ export default (
   chain: ChainStore;
   builtin: BuiltinStore;
   wallet: WalletStore;
+  flow: FlowStore;
 } => {
   config = {...(config || {})};
   if (!config.options || config.options.length === 0) {
     config.options = ['builtin'];
   }
   config.builtin = config.builtin || {autoProbe: false};
+  config.flow = config.flow || {autoSelect: false};
   const {debug, chainConfigs, builtin} = config;
 
   _chainConfigs = chainConfigs;
@@ -1089,6 +1116,53 @@ export default (
       // get fallBackProvider() {
       //   return _fallBackProvider;
       // }
+    },
+    flow: {
+      subscribe: flowStore.subscribe,
+      ensureContractsAreReady(): Promise<Contracts> {
+        if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
+          console.log('READY');
+          _flowReject = undefined;
+          _flowResolve = undefined;
+          if (!$chain.contracts) {
+            return Promise.reject('contracts not set');
+          } else {
+            return Promise.resolve($chain.contracts);
+          }
+        }
+        if (_flowPromise) {
+          console.log('promise waiting...');
+          return _flowPromise;
+        }
+        console.log('requestin contracts...');
+        set(flowStore, {requestingContracts: true});
+
+        _flowPromise = new Promise((resolve, reject) => {
+          _flowResolve = resolve;
+          _flowReject = reject;
+        });
+
+        if (config.flow && config.flow.autoSelect && $wallet.options.length === 1) {
+          connect($wallet.options[0]).catch((error) => {
+            _flowReject && _flowReject(error);
+            _flowPromise = undefined;
+            _flowReject = undefined;
+            _flowResolve = undefined;
+          });
+        }
+
+        return _flowPromise;
+      },
+      cancel() {
+        console.log('canceling...');
+        if (_flowReject) {
+          _flowReject({code: 1, message: 'Cancel'});
+        }
+        _flowPromise = undefined;
+        _flowReject = undefined;
+        _flowResolve = undefined;
+        set(flowStore, {requestingContracts: false});
+      },
     },
   };
 };

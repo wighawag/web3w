@@ -2,11 +2,12 @@ import { Contract, Overrides } from '@ethersproject/contracts';
 import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
 import { BigNumber } from '@ethersproject/bignumber';
 import { Readable } from './utils/internals';
+declare type ErrorData = {
+    code: number;
+    message: string;
+};
 declare type BaseData = {
-    error?: {
-        code: number;
-        message: string;
-    };
+    error?: ErrorData;
 };
 export declare type BalanceData = BaseData & {
     fetching: boolean;
@@ -56,6 +57,12 @@ export declare type WalletStore = Readable<WalletData> & {
     readonly chain: ChainData;
     readonly contracts: Contracts | undefined;
     readonly balance: BigNumber | undefined;
+};
+export declare type FlowStore = Readable<{
+    requestingContracts: boolean;
+}> & {
+    ensureContractsAreReady(): Promise<Contracts>;
+    cancel(): void;
 };
 export declare type BuiltinStore = Readable<BuiltinData> & {
     probe: () => Promise<WindowWeb3Provider>;
@@ -124,6 +131,9 @@ declare type TransactionRecord = {
 };
 export declare type Web3wConfig = {
     builtin?: BuiltinConfig;
+    flow?: {
+        autoSelect?: boolean;
+    };
     debug?: boolean;
     chainConfigs: ChainConfigs;
     options?: ModuleOptions;
@@ -138,6 +148,7 @@ declare const _default: (config: Web3wConfig) => {
     chain: ChainStore;
     builtin: BuiltinStore;
     wallet: WalletStore;
+    flow: FlowStore;
 };
 export default _default;
 //# sourceMappingURL=index.d.ts.map
