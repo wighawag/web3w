@@ -2,6 +2,8 @@ declare module "errors" {
     export const CHAIN_NO_PROVIDER = 6000;
     export const CHAIN_CONFIG_NOT_AVAILABLE = 6001;
     export const MODULE_ERROR = 1000;
+    export const CHAIN_ID_FAILED = 2001;
+    export const CHAIN_ID_NOT_SET = 2002;
 }
 declare module "utils/internals" {
     export const noop: () => void;
@@ -131,14 +133,14 @@ declare module "index" {
             message: string;
         };
     };
-    type BalanceData = Base & {
+    export type BalanceData = Base & {
         fetching: boolean;
         state: 'Idle' | 'Ready';
         stale?: boolean;
         amount?: BigNumber;
         blockNumber?: number;
     };
-    type BuiltinData = Base & {
+    export type BuiltinData = Base & {
         probing: boolean;
         state: 'Idle' | 'Ready';
         available?: boolean;
@@ -147,7 +149,7 @@ declare module "index" {
     type Contracts = {
         [name: string]: Contract;
     };
-    type ChainData = Base & {
+    export type ChainData = Base & {
         connecting: boolean;
         loadingData: boolean;
         state: 'Idle' | 'Connected' | 'Ready';
@@ -158,19 +160,35 @@ declare module "index" {
         contracts?: Contracts;
         notSupported?: boolean;
     };
-    type WalletData = Base & {
+    export type WalletData = Base & {
         connecting: boolean;
         state: 'Idle' | 'Locked' | 'Ready';
         unlocking: boolean;
         address?: string;
-        options?: string[];
+        options: string[];
         selected?: string;
         pendingUserConfirmation?: string[];
     };
-    type Abi = {
-        type: string;
-        name: string;
-    }[];
+    export type WalletStore = Readable<WalletData> & {
+        connect: typeof connect;
+        unlock: typeof unlock;
+        acknowledgeError: typeof acknowledgeError;
+        logout: typeof logout;
+        readonly options: string[];
+        readonly address: string | undefined;
+        readonly provider: JsonRpcProvider | undefined;
+        readonly web3Provider: WindowWeb3Provider | undefined;
+        readonly chain: ChainData;
+        readonly contracts: Contracts | undefined;
+        readonly balance: BigNumber | undefined;
+    };
+    export type BuiltinStore = Readable<BuiltinData> & {
+        probe: () => Promise<WindowWeb3Provider>;
+    };
+    export type ChainStore = Readable<ChainData>;
+    export type BalanceStore = Readable<BalanceData>;
+    export type TransactionStore = Readable<TransactionRecord[]>;
+    type Abi = any[];
     type AnyFunction = (...args: any[]) => any;
     interface RequestArguments {
         readonly method: string;
@@ -205,14 +223,15 @@ declare module "index" {
             abi: Abi;
         };
     };
-    type ChainConfig = {
+    export type ChainConfig = {
         chainId: string;
+        name?: string;
         contracts: ContractsInfos;
     };
-    type MultiChainConfigs = {
+    export type MultiChainConfigs = {
         [chainId: string]: ChainConfig;
     };
-    type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
+    export type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
     type BuiltinConfig = {
         autoProbe: boolean;
     };
@@ -235,24 +254,11 @@ declare module "index" {
     function logout(): Promise<void>;
     function unlock(): Promise<boolean>;
     const _default: (config: Web3wConfig) => {
-        transactions: Readable<TransactionRecord[]>;
-        balance: Readable<BalanceData>;
-        chain: Readable<ChainData>;
-        builtin: Readable<BuiltinData> & {
-            probe: () => Promise<void>;
-        };
-        wallet: Readable<WalletData> & {
-            connect: typeof connect;
-            unlock: typeof unlock;
-            acknowledgeError: typeof acknowledgeError;
-            logout: typeof logout;
-            readonly address: string | undefined;
-            readonly provider: JsonRpcProvider | undefined;
-            readonly web3Provider: WindowWeb3Provider | undefined;
-            readonly chain: ChainData;
-            readonly contracts: Contracts | undefined;
-            readonly balance: BigNumber | undefined;
-        };
+        transactions: TransactionStore;
+        balance: BalanceStore;
+        chain: ChainStore;
+        builtin: BuiltinStore;
+        wallet: WalletStore;
     };
     export default _default;
 }

@@ -46,7 +46,7 @@ const $wallet = {
     connecting: false,
     unlocking: false,
     address: undefined,
-    options: undefined,
+    options: ['builtin'],
     selected: undefined,
     pendingUserConfirmation: undefined,
     error: undefined,
@@ -109,7 +109,6 @@ function set(store, obj) {
 let _listenning = false;
 let _ethersProvider;
 let _web3Provider;
-let _builtinEthersProvider;
 let _builtinWeb3Provider;
 let _chainConfigs;
 let _currentModule;
@@ -133,7 +132,7 @@ function onChainChanged(chainId) {
             notSupported: undefined,
         });
         if ($wallet.address) {
-            yield loadChain(chainIdAsDecimal, $wallet.address);
+            yield loadChain(chainIdAsDecimal, $wallet.address, true);
         }
     });
 }
@@ -153,7 +152,7 @@ function onAccountsChanged(accounts) {
             set(walletStore, { address, state: 'Ready' });
             if ($chain.state === 'Connected') {
                 if ($chain.chainId) {
-                    yield loadChain($chain.chainId, address);
+                    yield loadChain($chain.chainId, address, false);
                 }
                 else {
                     throw new Error('no chainId while connected');
@@ -366,9 +365,9 @@ function recordSelection(type) {
 function fetchPreviousSelection() {
     return localStorage.getItem(LOCAL_STORAGE_SLOT);
 }
-function setupChain(address) {
+function setupChain(address, newProviderRequired) {
     return __awaiter(this, void 0, void 0, function* () {
-        const ethersProvider = ensureEthersProvider();
+        const ethersProvider = ensureEthersProvider(newProviderRequired);
         let chainId;
         if ($chain.state === 'Idle') {
             set(chainStore, { connecting: true });
@@ -420,12 +419,12 @@ function setupChain(address) {
             });
             throw new Error(error.message);
         }
-        yield loadChain(chainId, address);
+        yield loadChain(chainId, address, newProviderRequired);
     });
 }
-function loadChain(chainId, address) {
+function loadChain(chainId, address, newProviderRequired) {
     return __awaiter(this, void 0, void 0, function* () {
-        const ethersProvider = ensureEthersProvider();
+        const ethersProvider = ensureEthersProvider(newProviderRequired);
         set(chainStore, { loadingData: true });
         const contractsToAdd = {};
         const addresses = {};
@@ -493,8 +492,8 @@ function loadChain(chainId, address) {
         }); // TODO None ?
     });
 }
-function ensureEthersProvider() {
-    if (_ethersProvider === undefined) {
+function ensureEthersProvider(newProviderRequired) {
+    if (_ethersProvider === undefined || _web3Provider === undefined) {
         const error = {
             code: CHAIN_NO_PROVIDER,
             message: `no provider setup yet`,
@@ -509,10 +508,15 @@ function ensureEthersProvider() {
         });
         throw new Error(error.message);
     }
+    else {
+        if (newProviderRequired) {
+            _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
+        }
+    }
     return _ethersProvider;
 }
 function reAssignContracts(address) {
-    const ethersProvider = ensureEthersProvider();
+    const ethersProvider = ensureEthersProvider(false);
     const contracts = $chain.contracts;
     if (!contracts) {
         return;
@@ -557,9 +561,9 @@ function select(type, moduleConfig) {
         _web3Provider = undefined;
         if (typeOrModule === 'builtin') {
             _currentModule = undefined;
-            yield probeBuiltin(); // TODO try catch ?
-            _ethersProvider = _builtinEthersProvider;
-            _web3Provider = _builtinWeb3Provider;
+            const builtinWeb3Provider = yield probeBuiltin(); // TODO try catch ?
+            _web3Provider = builtinWeb3Provider;
+            _ethersProvider = proxyWeb3Provider(new Web3Provider(builtinWeb3Provider), _observers);
         }
         else {
             let module;
@@ -641,7 +645,7 @@ function select(type, moduleConfig) {
                 connecting: undefined,
             });
             listenForChanges();
-            yield setupChain(address);
+            yield setupChain(address, false);
         }
         else {
             listenForChanges();
@@ -668,7 +672,6 @@ function probeBuiltin() {
             if (ethereum) {
                 ethereum.autoRefreshOnNetworkChange = false;
                 _builtinWeb3Provider = ethereum;
-                _builtinEthersProvider = proxyWeb3Provider(new Web3Provider(ethereum), _observers);
                 set(builtinStore, {
                     state: 'Ready',
                     vendor: getVendor(ethereum),
@@ -694,7 +697,7 @@ function probeBuiltin() {
             });
             return reject(e);
         }
-        resolve();
+        resolve(_builtinWeb3Provider);
     }));
     return probing;
 }
@@ -784,7 +787,7 @@ function unlock() {
                     state: 'Ready',
                     unlocking: undefined,
                 });
-                yield setupChain(address); // TODO try catch ?
+                yield setupChain(address, true); // TODO try catch ?
             }
             else {
                 set(walletStore, { unlocking: false });
@@ -874,6 +877,9 @@ export default (config) => {
             unlock,
             acknowledgeError,
             logout,
+            get options() {
+                return $wallet.options;
+            },
             get address() {
                 return $wallet.address;
             },

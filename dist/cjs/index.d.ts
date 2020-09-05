@@ -8,14 +8,14 @@ declare type Base = {
         message: string;
     };
 };
-declare type BalanceData = Base & {
+export declare type BalanceData = Base & {
     fetching: boolean;
     state: 'Idle' | 'Ready';
     stale?: boolean;
     amount?: BigNumber;
     blockNumber?: number;
 };
-declare type BuiltinData = Base & {
+export declare type BuiltinData = Base & {
     probing: boolean;
     state: 'Idle' | 'Ready';
     available?: boolean;
@@ -24,7 +24,7 @@ declare type BuiltinData = Base & {
 declare type Contracts = {
     [name: string]: Contract;
 };
-declare type ChainData = Base & {
+export declare type ChainData = Base & {
     connecting: boolean;
     loadingData: boolean;
     state: 'Idle' | 'Connected' | 'Ready';
@@ -35,19 +35,35 @@ declare type ChainData = Base & {
     contracts?: Contracts;
     notSupported?: boolean;
 };
-declare type WalletData = Base & {
+export declare type WalletData = Base & {
     connecting: boolean;
     state: 'Idle' | 'Locked' | 'Ready';
     unlocking: boolean;
     address?: string;
-    options?: string[];
+    options: string[];
     selected?: string;
     pendingUserConfirmation?: string[];
 };
-declare type Abi = {
-    type: string;
-    name: string;
-}[];
+export declare type WalletStore = Readable<WalletData> & {
+    connect: typeof connect;
+    unlock: typeof unlock;
+    acknowledgeError: typeof acknowledgeError;
+    logout: typeof logout;
+    readonly options: string[];
+    readonly address: string | undefined;
+    readonly provider: JsonRpcProvider | undefined;
+    readonly web3Provider: WindowWeb3Provider | undefined;
+    readonly chain: ChainData;
+    readonly contracts: Contracts | undefined;
+    readonly balance: BigNumber | undefined;
+};
+export declare type BuiltinStore = Readable<BuiltinData> & {
+    probe: () => Promise<WindowWeb3Provider>;
+};
+export declare type ChainStore = Readable<ChainData>;
+export declare type BalanceStore = Readable<BalanceData>;
+export declare type TransactionStore = Readable<TransactionRecord[]>;
+declare type Abi = any[];
 declare type AnyFunction = (...args: any[]) => any;
 interface RequestArguments {
     readonly method: string;
@@ -82,14 +98,15 @@ declare type ContractsInfos = {
         abi: Abi;
     };
 };
-declare type ChainConfig = {
+export declare type ChainConfig = {
     chainId: string;
+    name?: string;
     contracts: ContractsInfos;
 };
-declare type MultiChainConfigs = {
+export declare type MultiChainConfigs = {
     [chainId: string]: ChainConfig;
 };
-declare type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
+export declare type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
 declare type BuiltinConfig = {
     autoProbe: boolean;
 };
@@ -112,24 +129,11 @@ declare function acknowledgeError(field: string): void;
 declare function logout(): Promise<void>;
 declare function unlock(): Promise<boolean>;
 declare const _default: (config: Web3wConfig) => {
-    transactions: Readable<TransactionRecord[]>;
-    balance: Readable<BalanceData>;
-    chain: Readable<ChainData>;
-    builtin: Readable<BuiltinData> & {
-        probe: () => Promise<void>;
-    };
-    wallet: Readable<WalletData> & {
-        connect: typeof connect;
-        unlock: typeof unlock;
-        acknowledgeError: typeof acknowledgeError;
-        logout: typeof logout;
-        readonly address: string | undefined;
-        readonly provider: JsonRpcProvider | undefined;
-        readonly web3Provider: WindowWeb3Provider | undefined;
-        readonly chain: ChainData;
-        readonly contracts: Contracts | undefined;
-        readonly balance: BigNumber | undefined;
-    };
+    transactions: TransactionStore;
+    balance: BalanceStore;
+    chain: ChainStore;
+    builtin: BuiltinStore;
+    wallet: WalletStore;
 };
 export default _default;
 //# sourceMappingURL=index.d.ts.map

@@ -104,11 +104,19 @@ function proxyContract(contractToProxy, name, observers) {
             else if (prop === '_proxiedContract') {
                 return contractToProxy;
             }
+            else if (prop === 'connect') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return (signer) => {
+                    return proxyContract(contractToProxy.connect(signer), name, observers);
+                };
+            }
             else if (prop === 'toJSON') {
-                // TODO test
                 return () => ({
                     address: contractToProxy.address,
                     abi: contractToProxy.interface.fragments,
+                    functionsSignatures: contractToProxy.interface.fragments.map((f) => {
+                        return f.format('full');
+                    }),
                 });
             }
             else {

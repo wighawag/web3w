@@ -23,7 +23,7 @@ type Base = {
   error?: {code: number; message: string};
 };
 
-type BalanceData = Base & {
+export type BalanceData = Base & {
   fetching: boolean;
   state: 'Idle' | 'Ready';
   stale?: boolean;
@@ -31,7 +31,7 @@ type BalanceData = Base & {
   blockNumber?: number;
 };
 
-type BuiltinData = Base & {
+export type BuiltinData = Base & {
   probing: boolean;
   state: 'Idle' | 'Ready';
   available?: boolean;
@@ -40,7 +40,7 @@ type BuiltinData = Base & {
 
 type Contracts = {[name: string]: Contract};
 
-type ChainData = Base & {
+export type ChainData = Base & {
   connecting: boolean;
   loadingData: boolean;
   state: 'Idle' | 'Connected' | 'Ready';
@@ -50,17 +50,40 @@ type ChainData = Base & {
   notSupported?: boolean;
 };
 
-type WalletData = Base & {
+export type WalletData = Base & {
   connecting: boolean;
   state: 'Idle' | 'Locked' | 'Ready';
   unlocking: boolean;
   address?: string;
-  options?: string[]; // wallet Types available
+  options: string[]; // wallet Types available
   selected?: string;
   pendingUserConfirmation?: string[];
 };
 
-type Abi = {type: string; name: string}[]; // TODO
+export type WalletStore = Readable<WalletData> & {
+  connect: typeof connect;
+  unlock: typeof unlock;
+  acknowledgeError: typeof acknowledgeError;
+  logout: typeof logout;
+  readonly options: string[];
+  readonly address: string | undefined;
+  readonly provider: JsonRpcProvider | undefined;
+  readonly web3Provider: WindowWeb3Provider | undefined;
+  readonly chain: ChainData;
+  readonly contracts: Contracts | undefined;
+  readonly balance: BigNumber | undefined;
+};
+
+export type BuiltinStore = Readable<BuiltinData> & {
+  probe: () => Promise<WindowWeb3Provider>;
+};
+
+export type ChainStore = Readable<ChainData>;
+export type BalanceStore = Readable<BalanceData>;
+export type TransactionStore = Readable<TransactionRecord[]>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Abi = any[];
 
 type WritableWithData<T> = Writable<T> & {data: T};
 
@@ -90,14 +113,18 @@ type Module = {
 
 type ModuleOptions = (string | Module)[]; //TODO
 type ContractsInfos = {[name: string]: {address: string; abi: Abi}};
-type ChainConfig = {
+export type ChainConfig = {
   chainId: string;
+  name?: string;
   contracts: ContractsInfos;
 };
 
-type MultiChainConfigs = {[chainId: string]: ChainConfig};
+export type MultiChainConfigs = {[chainId: string]: ChainConfig};
 
-type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
+export type ChainConfigs =
+  | MultiChainConfigs
+  | ChainConfig
+  | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
 
 type BuiltinConfig = {
   autoProbe: boolean;
@@ -157,7 +184,7 @@ const $wallet: WalletData = {
   connecting: false,
   unlocking: false,
   address: undefined,
-  options: undefined, // wallet Types available
+  options: ['builtin'],
   selected: undefined,
   pendingUserConfirmation: undefined, // [] array of type of request
   error: undefined,
@@ -224,7 +251,6 @@ function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
 let _listenning = false;
 let _ethersProvider: JsonRpcProvider | undefined;
 let _web3Provider: WindowWeb3Provider | undefined;
-let _builtinEthersProvider: JsonRpcProvider | undefined;
 let _builtinWeb3Provider: WindowWeb3Provider | undefined;
 let _chainConfigs: ChainConfigs;
 let _currentModule: Module | undefined;
@@ -248,7 +274,7 @@ async function onChainChanged(chainId: string) {
     notSupported: undefined,
   });
   if ($wallet.address) {
-    await loadChain(chainIdAsDecimal, $wallet.address);
+    await loadChain(chainIdAsDecimal, $wallet.address, true);
   }
 }
 
@@ -268,7 +294,7 @@ async function onAccountsChanged(accounts: string[]) {
     set(walletStore, {address, state: 'Ready'});
     if ($chain.state === 'Connected') {
       if ($chain.chainId) {
-        await loadChain($chain.chainId, address);
+        await loadChain($chain.chainId, address, false);
       } else {
         throw new Error('no chainId while connected');
       }
@@ -516,8 +542,8 @@ function fetchPreviousSelection() {
   return localStorage.getItem(LOCAL_STORAGE_SLOT);
 }
 
-async function setupChain(address: string) {
-  const ethersProvider = ensureEthersProvider();
+async function setupChain(address: string, newProviderRequired: boolean) {
+  const ethersProvider = ensureEthersProvider(newProviderRequired);
   let chainId;
   if ($chain.state === 'Idle') {
     set(chainStore, {connecting: true});
@@ -568,11 +594,11 @@ async function setupChain(address: string) {
     throw new Error(error.message);
   }
 
-  await loadChain(chainId, address);
+  await loadChain(chainId, address, newProviderRequired);
 }
 
-async function loadChain(chainId: string, address: string): Promise<void> {
-  const ethersProvider = ensureEthersProvider();
+async function loadChain(chainId: string, address: string, newProviderRequired: boolean): Promise<void> {
+  const ethersProvider = ensureEthersProvider(newProviderRequired);
   set(chainStore, {loadingData: true});
   const contractsToAdd: {[name: string]: Contract} = {};
   const addresses: {[name: string]: string} = {};
@@ -641,8 +667,8 @@ async function loadChain(chainId: string, address: string): Promise<void> {
   }); // TODO None ?
 }
 
-function ensureEthersProvider(): JsonRpcProvider {
-  if (_ethersProvider === undefined) {
+function ensureEthersProvider(newProviderRequired: boolean): JsonRpcProvider {
+  if (_ethersProvider === undefined || _web3Provider === undefined) {
     const error = {
       code: CHAIN_NO_PROVIDER,
       message: `no provider setup yet`,
@@ -656,12 +682,16 @@ function ensureEthersProvider(): JsonRpcProvider {
       state: 'Idle',
     });
     throw new Error(error.message);
+  } else {
+    if (newProviderRequired) {
+      _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
+    }
   }
   return _ethersProvider;
 }
 
 function reAssignContracts(address: string) {
-  const ethersProvider = ensureEthersProvider();
+  const ethersProvider = ensureEthersProvider(false);
   const contracts = $chain.contracts;
   if (!contracts) {
     return;
@@ -709,9 +739,9 @@ async function select(type: string, moduleConfig?: any) {
   _web3Provider = undefined;
   if (typeOrModule === 'builtin') {
     _currentModule = undefined;
-    await probeBuiltin(); // TODO try catch ?
-    _ethersProvider = _builtinEthersProvider;
-    _web3Provider = _builtinWeb3Provider;
+    const builtinWeb3Provider = await probeBuiltin(); // TODO try catch ?
+    _web3Provider = builtinWeb3Provider;
+    _ethersProvider = proxyWeb3Provider(new Web3Provider(builtinWeb3Provider), _observers);
   } else {
     let module: Module | undefined;
     if (typeof typeOrModule === 'string') {
@@ -792,7 +822,7 @@ async function select(type: string, moduleConfig?: any) {
       connecting: undefined,
     });
     listenForChanges();
-    await setupChain(address);
+    await setupChain(address, false);
   } else {
     listenForChanges();
     set(walletStore, {
@@ -803,7 +833,7 @@ async function select(type: string, moduleConfig?: any) {
   }
 }
 
-let probing: Promise<void> | undefined;
+let probing: Promise<WindowWeb3Provider> | undefined;
 function probeBuiltin() {
   if (probing) {
     return probing;
@@ -818,7 +848,6 @@ function probeBuiltin() {
       if (ethereum) {
         ethereum.autoRefreshOnNetworkChange = false;
         _builtinWeb3Provider = ethereum;
-        _builtinEthersProvider = proxyWeb3Provider(new Web3Provider(ethereum), _observers);
         set(builtinStore, {
           state: 'Ready',
           vendor: getVendor(ethereum),
@@ -842,7 +871,7 @@ function probeBuiltin() {
       });
       return reject(e);
     }
-    resolve();
+    resolve(_builtinWeb3Provider);
   });
   return probing;
 }
@@ -931,7 +960,7 @@ function unlock() {
           state: 'Ready',
           unlocking: undefined,
         });
-        await setupChain(address); // TODO try catch ?
+        await setupChain(address, true); // TODO try catch ?
       } else {
         set(walletStore, {unlocking: false});
         unlocking = undefined;
@@ -956,24 +985,11 @@ function unlock() {
 export default (
   config: Web3wConfig
 ): {
-  transactions: Readable<TransactionRecord[]>;
-  balance: Readable<BalanceData>;
-  chain: Readable<ChainData>;
-  builtin: Readable<BuiltinData> & {
-    probe: () => Promise<void>;
-  };
-  wallet: Readable<WalletData> & {
-    connect: typeof connect;
-    unlock: typeof unlock;
-    acknowledgeError: typeof acknowledgeError;
-    logout: typeof logout;
-    readonly address: string | undefined;
-    readonly provider: JsonRpcProvider | undefined;
-    readonly web3Provider: WindowWeb3Provider | undefined;
-    readonly chain: ChainData;
-    readonly contracts: Contracts | undefined;
-    readonly balance: BigNumber | undefined;
-  };
+  transactions: TransactionStore;
+  balance: BalanceStore;
+  chain: ChainStore;
+  builtin: BuiltinStore;
+  wallet: WalletStore;
 } => {
   config = {...(config || {})};
   if (!config.options || config.options.length === 0) {
@@ -1045,6 +1061,9 @@ export default (
       unlock,
       acknowledgeError,
       logout,
+      get options() {
+        return $wallet.options;
+      },
       get address() {
         return $wallet.address;
       },
