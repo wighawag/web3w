@@ -2,20 +2,21 @@ import { Contract, Overrides } from '@ethersproject/contracts';
 import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
 import { BigNumber } from '@ethersproject/bignumber';
 import { Readable } from './utils/internals';
-declare type Base = {
-    error?: {
-        code: number;
-        message: string;
-    };
+declare type ErrorData = {
+    code: number;
+    message: string;
 };
-export declare type BalanceData = Base & {
+declare type BaseData = {
+    error?: ErrorData;
+};
+export declare type BalanceData = BaseData & {
     fetching: boolean;
     state: 'Idle' | 'Ready';
     stale?: boolean;
     amount?: BigNumber;
     blockNumber?: number;
 };
-export declare type BuiltinData = Base & {
+export declare type BuiltinData = BaseData & {
     probing: boolean;
     state: 'Idle' | 'Ready';
     available?: boolean;
@@ -24,7 +25,7 @@ export declare type BuiltinData = Base & {
 declare type Contracts = {
     [name: string]: Contract;
 };
-export declare type ChainData = Base & {
+export declare type ChainData = BaseData & {
     connecting: boolean;
     loadingData: boolean;
     state: 'Idle' | 'Connected' | 'Ready';
@@ -35,7 +36,7 @@ export declare type ChainData = Base & {
     contracts?: Contracts;
     notSupported?: boolean;
 };
-export declare type WalletData = Base & {
+export declare type WalletData = BaseData & {
     connecting: boolean;
     state: 'Idle' | 'Locked' | 'Ready';
     unlocking: boolean;
@@ -47,7 +48,7 @@ export declare type WalletData = Base & {
 export declare type WalletStore = Readable<WalletData> & {
     connect: typeof connect;
     unlock: typeof unlock;
-    acknowledgeError: typeof acknowledgeError;
+    acknowledgeError: () => void;
     logout: typeof logout;
     readonly options: string[];
     readonly address: string | undefined;
@@ -57,11 +58,22 @@ export declare type WalletStore = Readable<WalletData> & {
     readonly contracts: Contracts | undefined;
     readonly balance: BigNumber | undefined;
 };
+export declare type FlowStore = Readable<{
+    requestingContracts: boolean;
+}> & {
+    ensureContractsAreReady(): Promise<Contracts>;
+    cancel(): void;
+};
 export declare type BuiltinStore = Readable<BuiltinData> & {
     probe: () => Promise<WindowWeb3Provider>;
+    acknowledgeError: () => void;
 };
-export declare type ChainStore = Readable<ChainData>;
-export declare type BalanceStore = Readable<BalanceData>;
+export declare type ChainStore = Readable<ChainData> & {
+    acknowledgeError: () => void;
+};
+export declare type BalanceStore = Readable<BalanceData> & {
+    acknowledgeError: () => void;
+};
 export declare type TransactionStore = Readable<TransactionRecord[]>;
 declare type Abi = any[];
 declare type AnyFunction = (...args: any[]) => any;
@@ -119,13 +131,15 @@ declare type TransactionRecord = {
 };
 export declare type Web3wConfig = {
     builtin?: BuiltinConfig;
+    flow?: {
+        autoSelect?: boolean;
+    };
     debug?: boolean;
     chainConfigs: ChainConfigs;
     options?: ModuleOptions;
     autoSelectPrevious?: boolean;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
-declare function acknowledgeError(field: string): void;
 declare function logout(): Promise<void>;
 declare function unlock(): Promise<boolean>;
 declare const _default: (config: Web3wConfig) => {
@@ -134,6 +148,7 @@ declare const _default: (config: Web3wConfig) => {
     chain: ChainStore;
     builtin: BuiltinStore;
     wallet: WalletStore;
+    flow: FlowStore;
 };
 export default _default;
 //# sourceMappingURL=index.d.ts.map

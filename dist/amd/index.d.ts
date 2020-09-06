@@ -127,20 +127,21 @@ declare module "index" {
     import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
     import { BigNumber } from '@ethersproject/bignumber';
     import { Readable } from "utils/internals";
-    type Base = {
-        error?: {
-            code: number;
-            message: string;
-        };
+    type ErrorData = {
+        code: number;
+        message: string;
     };
-    export type BalanceData = Base & {
+    type BaseData = {
+        error?: ErrorData;
+    };
+    export type BalanceData = BaseData & {
         fetching: boolean;
         state: 'Idle' | 'Ready';
         stale?: boolean;
         amount?: BigNumber;
         blockNumber?: number;
     };
-    export type BuiltinData = Base & {
+    export type BuiltinData = BaseData & {
         probing: boolean;
         state: 'Idle' | 'Ready';
         available?: boolean;
@@ -149,7 +150,7 @@ declare module "index" {
     type Contracts = {
         [name: string]: Contract;
     };
-    export type ChainData = Base & {
+    export type ChainData = BaseData & {
         connecting: boolean;
         loadingData: boolean;
         state: 'Idle' | 'Connected' | 'Ready';
@@ -160,7 +161,7 @@ declare module "index" {
         contracts?: Contracts;
         notSupported?: boolean;
     };
-    export type WalletData = Base & {
+    export type WalletData = BaseData & {
         connecting: boolean;
         state: 'Idle' | 'Locked' | 'Ready';
         unlocking: boolean;
@@ -172,7 +173,7 @@ declare module "index" {
     export type WalletStore = Readable<WalletData> & {
         connect: typeof connect;
         unlock: typeof unlock;
-        acknowledgeError: typeof acknowledgeError;
+        acknowledgeError: () => void;
         logout: typeof logout;
         readonly options: string[];
         readonly address: string | undefined;
@@ -182,11 +183,22 @@ declare module "index" {
         readonly contracts: Contracts | undefined;
         readonly balance: BigNumber | undefined;
     };
+    export type FlowStore = Readable<{
+        requestingContracts: boolean;
+    }> & {
+        ensureContractsAreReady(): Promise<Contracts>;
+        cancel(): void;
+    };
     export type BuiltinStore = Readable<BuiltinData> & {
         probe: () => Promise<WindowWeb3Provider>;
+        acknowledgeError: () => void;
     };
-    export type ChainStore = Readable<ChainData>;
-    export type BalanceStore = Readable<BalanceData>;
+    export type ChainStore = Readable<ChainData> & {
+        acknowledgeError: () => void;
+    };
+    export type BalanceStore = Readable<BalanceData> & {
+        acknowledgeError: () => void;
+    };
     export type TransactionStore = Readable<TransactionRecord[]>;
     type Abi = any[];
     type AnyFunction = (...args: any[]) => any;
@@ -244,13 +256,15 @@ declare module "index" {
     };
     export type Web3wConfig = {
         builtin?: BuiltinConfig;
+        flow?: {
+            autoSelect?: boolean;
+        };
         debug?: boolean;
         chainConfigs: ChainConfigs;
         options?: ModuleOptions;
         autoSelectPrevious?: boolean;
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
-    function acknowledgeError(field: string): void;
     function logout(): Promise<void>;
     function unlock(): Promise<boolean>;
     const _default: (config: Web3wConfig) => {
@@ -259,6 +273,7 @@ declare module "index" {
         chain: ChainStore;
         builtin: BuiltinStore;
         wallet: WalletStore;
+        flow: FlowStore;
     };
     export default _default;
 }
