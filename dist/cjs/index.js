@@ -40,7 +40,7 @@ const $chain = {
     state: 'Idle',
     connecting: false,
     loadingData: false,
-    contracts: {},
+    contracts: undefined,
     error: undefined,
 };
 const $wallet = {
@@ -54,7 +54,9 @@ const $wallet = {
     error: undefined,
 };
 const $flow = {
-    requestingContracts: false,
+    inProgress: false,
+    call: undefined,
+    error: undefined,
 };
 function store(data) {
     const result = store_1.writable(data);
@@ -500,8 +502,16 @@ function loadChain(chainId, address, newProviderRequired) {
             contracts: contractsToAdd,
         }); // TODO None ?
         if ($wallet.state === 'Ready') {
-            set(flowStore, { requestingContracts: false });
-            _flowResolve && _flowResolve(contractsToAdd);
+            set(flowStore, { inProgress: false });
+            if (_flowResolve) {
+                const oldFlowResolve = _flowResolve;
+                if ($flow.call) {
+                    $flow.call(contractsToAdd).then(() => oldFlowResolve(contractsToAdd));
+                }
+                else {
+                    _flowResolve(contractsToAdd);
+                }
+            }
             _flowPromise = undefined;
             _flowReject = undefined;
             _flowResolve = undefined;
@@ -916,16 +926,30 @@ exports.default = (config) => {
         },
         flow: {
             subscribe: flowStore.subscribe,
-            ensureContractsAreReady() {
+            execute(func) {
                 if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
                     console.log('READY');
                     _flowReject = undefined;
                     _flowResolve = undefined;
+                    _flowPromise = undefined;
                     if (!$chain.contracts) {
                         return Promise.reject('contracts not set');
                     }
                     else {
-                        return Promise.resolve($chain.contracts);
+                        const contracts = $chain.contracts;
+                        if (func) {
+                            const result = func(contracts);
+                            if ('then' in result) {
+                                set(flowStore, { call: func, inProgress: true });
+                                return result
+                                    .then(() => contracts)
+                                    .catch((err) => {
+                                    set(flowStore, { inProgress: false, error: err });
+                                    return Promise.reject(err);
+                                });
+                            }
+                        }
+                        return Promise.resolve(contracts);
                     }
                 }
                 if (_flowPromise) {
@@ -933,7 +957,7 @@ exports.default = (config) => {
                     return _flowPromise;
                 }
                 console.log('requestin contracts...');
-                set(flowStore, { requestingContracts: true });
+                set(flowStore, { call: func, inProgress: true });
                 _flowPromise = new Promise((resolve, reject) => {
                     _flowResolve = resolve;
                     _flowReject = reject;
@@ -956,7 +980,7 @@ exports.default = (config) => {
                 _flowPromise = undefined;
                 _flowReject = undefined;
                 _flowResolve = undefined;
-                set(flowStore, { requestingContracts: false });
+                set(flowStore, { inProgress: false });
             },
         },
     };

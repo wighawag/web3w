@@ -93,6 +93,7 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
           let outcome;
           if (overrides) {
             outcome = overrides.outcome;
+            overrides = {...overrides}; // copy to preserve original object
             delete overrides.outcome;
           }
           onContractTxRequested({name, method: methodName, overrides, outcome});

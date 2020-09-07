@@ -161,6 +161,10 @@ declare module "index" {
         contracts?: Contracts;
         notSupported?: boolean;
     };
+    export type FlowData = BaseData & {
+        inProgress: boolean;
+        call: ((contracts: Contracts) => Promise<void>) | undefined;
+    };
     export type WalletData = BaseData & {
         connecting: boolean;
         state: 'Idle' | 'Locked' | 'Ready';
@@ -183,10 +187,8 @@ declare module "index" {
         readonly contracts: Contracts | undefined;
         readonly balance: BigNumber | undefined;
     };
-    export type FlowStore = Readable<{
-        requestingContracts: boolean;
-    }> & {
-        ensureContractsAreReady(): Promise<Contracts>;
+    export type FlowStore = Readable<FlowData> & {
+        execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
         cancel(): void;
     };
     export type BuiltinStore = Readable<BuiltinData> & {

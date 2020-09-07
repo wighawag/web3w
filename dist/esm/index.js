@@ -38,7 +38,7 @@ const $chain = {
     state: 'Idle',
     connecting: false,
     loadingData: false,
-    contracts: {},
+    contracts: undefined,
     error: undefined,
 };
 const $wallet = {
@@ -52,7 +52,9 @@ const $wallet = {
     error: undefined,
 };
 const $flow = {
-    requestingContracts: false,
+    inProgress: false,
+    call: undefined,
+    error: undefined,
 };
 function store(data) {
     const result = writable(data);
@@ -498,8 +500,29 @@ function loadChain(chainId, address, newProviderRequired) {
             contracts: contractsToAdd,
         }); // TODO None ?
         if ($wallet.state === 'Ready') {
-            set(flowStore, { requestingContracts: false });
-            _flowResolve && _flowResolve(contractsToAdd);
+            if (_flowResolve) {
+                const oldFlowResolve = _flowResolve;
+                const oldFlowReject = _flowReject;
+                if ($flow.call) {
+                    console.log('Calling func...');
+                    $flow
+                        .call(contractsToAdd)
+                        .then(() => {
+                        console.log('call success');
+                        set(flowStore, { inProgress: false, error: undefined });
+                        oldFlowResolve(contractsToAdd);
+                    })
+                        .catch((err) => {
+                        console.log('call error');
+                        set(flowStore, { error: err });
+                        oldFlowReject && oldFlowReject(err);
+                    });
+                }
+                else {
+                    set(flowStore, { inProgress: false, error: undefined });
+                    _flowResolve(contractsToAdd);
+                }
+            }
             _flowPromise = undefined;
             _flowReject = undefined;
             _flowResolve = undefined;
@@ -825,7 +848,7 @@ export default (config) => {
         config.options = ['builtin'];
     }
     config.builtin = config.builtin || { autoProbe: false };
-    config.flow = config.flow || { autoSelect: false };
+    config.flow = config.flow || { autoSelect: false, autoUnlock: false };
     const { debug, chainConfigs, builtin } = config;
     _chainConfigs = chainConfigs;
     if (debug && typeof window !== 'undefined') {
@@ -914,16 +937,36 @@ export default (config) => {
         },
         flow: {
             subscribe: flowStore.subscribe,
-            ensureContractsAreReady() {
+            execute(func) {
+                if (func && $flow.call) {
+                    throw new Error(`flow in progress`);
+                }
                 if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
                     console.log('READY');
                     _flowReject = undefined;
                     _flowResolve = undefined;
+                    _flowPromise = undefined;
                     if (!$chain.contracts) {
                         return Promise.reject('contracts not set');
                     }
                     else {
-                        return Promise.resolve($chain.contracts);
+                        const contracts = $chain.contracts;
+                        if (func) {
+                            const result = func(contracts);
+                            if ('then' in result) {
+                                set(flowStore, { call: func, inProgress: true, error: undefined });
+                                return result
+                                    .then(() => {
+                                    set(flowStore, { inProgress: false, error: undefined, call: undefined });
+                                    return contracts;
+                                })
+                                    .catch((err) => {
+                                    set(flowStore, { error: err });
+                                    return Promise.reject(err);
+                                });
+                            }
+                        }
+                        return Promise.resolve(contracts);
                     }
                 }
                 if (_flowPromise) {
@@ -931,18 +974,32 @@ export default (config) => {
                     return _flowPromise;
                 }
                 console.log('requestin contracts...');
-                set(flowStore, { requestingContracts: true });
+                set(flowStore, { call: func, inProgress: true });
                 _flowPromise = new Promise((resolve, reject) => {
                     _flowResolve = resolve;
                     _flowReject = reject;
                 });
-                if (config.flow && config.flow.autoSelect && $wallet.options.length === 1) {
-                    connect($wallet.options[0]).catch((error) => {
-                        _flowReject && _flowReject(error);
-                        _flowPromise = undefined;
-                        _flowReject = undefined;
-                        _flowResolve = undefined;
-                    });
+                if ($wallet.state === 'Locked') {
+                    if (config.flow && config.flow.autoUnlock) {
+                        unlock().catch((error) => {
+                            set(flowStore, { error });
+                            // _flowReject && _flowReject(error);
+                            // _flowPromise = undefined;
+                            // _flowReject = undefined;
+                            // _flowResolve = undefined;
+                        });
+                    }
+                }
+                else if ($wallet.state === 'Idle' && $wallet.options.length === 1) {
+                    if (config.flow && config.flow.autoSelect) {
+                        connect($wallet.options[0]).catch((error) => {
+                            set(flowStore, { error });
+                            // _flowReject && _flowReject(error);
+                            // _flowPromise = undefined;
+                            // _flowReject = undefined;
+                            // _flowResolve = undefined;
+                        });
+                    }
                 }
                 return _flowPromise;
             },
@@ -954,7 +1011,7 @@ export default (config) => {
                 _flowPromise = undefined;
                 _flowReject = undefined;
                 _flowResolve = undefined;
-                set(flowStore, { requestingContracts: false });
+                set(flowStore, { call: undefined, inProgress: false, error: undefined });
             },
         },
     };
