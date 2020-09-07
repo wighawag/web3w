@@ -125,13 +125,13 @@ type WindowWeb3Provider = ExternalProvider & {
   removeListener?(event: string, callback: AnyFunction): void;
 };
 
-type Module = {
+export type Web3WModule = {
   id: string;
   setup(options?: ModuleOptions): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
   logout(): Promise<void>;
 };
 
-type ModuleOptions = (string | Module)[]; //TODO
+type ModuleOptions = (string | Web3WModule)[]; //TODO
 type ContractsInfos = {[name: string]: {address: string; abi: Abi}};
 export type ChainConfig = {
   chainId: string;
@@ -282,7 +282,7 @@ let _ethersProvider: JsonRpcProvider | undefined;
 let _web3Provider: WindowWeb3Provider | undefined;
 let _builtinWeb3Provider: WindowWeb3Provider | undefined;
 let _chainConfigs: ChainConfigs;
-let _currentModule: Module | undefined;
+let _currentModule: Web3WModule | undefined;
 let _options: ModuleOptions;
 
 let _flowPromise: Promise<Contracts> | undefined;
@@ -787,7 +787,7 @@ async function select(type: string, moduleConfig?: any) {
     await logout();
   }
 
-  let typeOrModule: string | Module = type;
+  let typeOrModule: string | Web3WModule = type;
 
   if (!typeOrModule) {
     if (_options.length === 0) {
@@ -821,7 +821,7 @@ async function select(type: string, moduleConfig?: any) {
     _web3Provider = builtinWeb3Provider;
     _ethersProvider = proxyWeb3Provider(new Web3Provider(builtinWeb3Provider), _observers);
   } else {
-    let module: Module | undefined;
+    let module: Web3WModule | undefined;
     if (typeof typeOrModule === 'string') {
       if (_options) {
         for (const choice of _options) {
