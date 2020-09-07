@@ -163,7 +163,6 @@ declare module "index" {
     };
     export type FlowData = BaseData & {
         inProgress: boolean;
-        call: ((contracts: Contracts) => Promise<void>) | undefined;
     };
     export type WalletData = BaseData & {
         connecting: boolean;
@@ -189,6 +188,7 @@ declare module "index" {
     };
     export type FlowStore = Readable<FlowData> & {
         execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
+        retry(): Promise<void>;
         cancel(): void;
     };
     export type BuiltinStore = Readable<BuiltinData> & {
@@ -260,6 +260,7 @@ declare module "index" {
         builtin?: BuiltinConfig;
         flow?: {
             autoSelect?: boolean;
+            autoUnlock?: boolean;
         };
         debug?: boolean;
         chainConfigs: ChainConfigs;

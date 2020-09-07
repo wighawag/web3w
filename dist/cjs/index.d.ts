@@ -38,7 +38,6 @@ export declare type ChainData = BaseData & {
 };
 export declare type FlowData = BaseData & {
     inProgress: boolean;
-    call: ((contracts: Contracts) => Promise<void>) | undefined;
 };
 export declare type WalletData = BaseData & {
     connecting: boolean;
@@ -64,6 +63,7 @@ export declare type WalletStore = Readable<WalletData> & {
 };
 export declare type FlowStore = Readable<FlowData> & {
     execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
+    retry(): Promise<void>;
     cancel(): void;
 };
 export declare type BuiltinStore = Readable<BuiltinData> & {
@@ -135,6 +135,7 @@ export declare type Web3wConfig = {
     builtin?: BuiltinConfig;
     flow?: {
         autoSelect?: boolean;
+        autoUnlock?: boolean;
     };
     debug?: boolean;
     chainConfigs: ChainConfigs;

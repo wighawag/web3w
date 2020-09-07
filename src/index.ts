@@ -54,7 +54,6 @@ export type ChainData = BaseData & {
 
 export type FlowData = BaseData & {
   inProgress: boolean;
-  call: ((contracts: Contracts) => Promise<void>) | undefined;
 };
 
 export type WalletData = BaseData & {
@@ -83,6 +82,7 @@ export type WalletStore = Readable<WalletData> & {
 
 export type FlowStore = Readable<FlowData> & {
   execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
+  retry(): Promise<void>;
   cancel(): void;
 };
 
@@ -211,7 +211,6 @@ const $wallet: WalletData = {
 
 const $flow: FlowData = {
   inProgress: false,
-  call: undefined,
   error: undefined,
 };
 
@@ -285,6 +284,7 @@ let _options: ModuleOptions;
 let _flowPromise: Promise<Contracts> | undefined;
 let _flowResolve: ((val: Contracts) => void) | undefined;
 let _flowReject: ((err: ErrorData) => void) | undefined;
+let _call: ((contracts: Contracts) => Promise<void>) | undefined;
 
 async function onChainChanged(chainId: string) {
   if (chainId === '0xNaN') {
@@ -699,29 +699,23 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
   if ($wallet.state === 'Ready') {
     if (_flowResolve) {
       const oldFlowResolve = _flowResolve;
-      const oldFlowReject = _flowReject;
-      if ($flow.call) {
-        console.log('Calling func...');
-        $flow
-          .call(contractsToAdd)
+      if (_call) {
+        _call(contractsToAdd)
           .then(() => {
-            console.log('call success');
             set(flowStore, {inProgress: false, error: undefined});
             oldFlowResolve(contractsToAdd);
+            _flowPromise = undefined;
+            _flowReject = undefined;
+            _flowResolve = undefined;
           })
           .catch((err) => {
-            console.log('call error');
             set(flowStore, {error: err});
-            oldFlowReject && oldFlowReject(err);
           });
       } else {
         set(flowStore, {inProgress: false, error: undefined});
         _flowResolve(contractsToAdd);
       }
     }
-    _flowPromise = undefined;
-    _flowReject = undefined;
-    _flowResolve = undefined;
   }
 }
 
@@ -1147,12 +1141,62 @@ export default (
     },
     flow: {
       subscribe: flowStore.subscribe,
+      retry(): Promise<void> {
+        if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
+          if (!$chain.contracts) {
+            return Promise.reject('contracts not set');
+          } else {
+            const contracts = $chain.contracts;
+            if (_call) {
+              const result = _call(contracts);
+              if ('then' in result) {
+                return result
+                  .then(() => {
+                    _call = undefined;
+                    set(flowStore, {inProgress: false, error: undefined});
+                    return _flowResolve && _flowResolve(contracts);
+                  })
+                  .catch((err) => {
+                    set(flowStore, {error: err});
+                    return Promise.reject(err);
+                  });
+              }
+            }
+            _flowResolve && _flowResolve(contracts);
+            return Promise.resolve();
+          }
+        }
+        if ($wallet.state === 'Locked') {
+          if (config.flow && config.flow.autoUnlock) {
+            unlock().catch((error) => {
+              set(flowStore, {error});
+              // _flowReject && _flowReject(error);
+              // _flowPromise = undefined;
+              // _flowReject = undefined;
+              // _flowResolve = undefined;
+            });
+          }
+        } else if ($wallet.state === 'Idle' && $wallet.options.length === 1) {
+          if (config.flow && config.flow.autoSelect) {
+            connect($wallet.options[0]).catch((error) => {
+              set(flowStore, {error});
+              // _flowReject && _flowReject(error);
+              // _flowPromise = undefined;
+              // _flowReject = undefined;
+              // _flowResolve = undefined;
+            });
+          }
+        }
+        if (!_flowPromise) {
+          return Promise.resolve();
+        }
+        return _flowPromise.then(() => undefined);
+      },
       execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts> {
-        if (func && $flow.call) {
+        if ($flow.inProgress) {
           throw new Error(`flow in progress`);
         }
         if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
-          console.log('READY');
           _flowReject = undefined;
           _flowResolve = undefined;
           _flowPromise = undefined;
@@ -1163,10 +1207,12 @@ export default (
             if (func) {
               const result = func(contracts);
               if ('then' in result) {
-                set(flowStore, {call: func, inProgress: true, error: undefined});
+                _call = func;
+                set(flowStore, {inProgress: true, error: undefined});
                 return result
                   .then(() => {
-                    set(flowStore, {inProgress: false, error: undefined, call: undefined});
+                    _call = undefined;
+                    set(flowStore, {inProgress: false, error: undefined});
                     return contracts;
                   })
                   .catch((err) => {
@@ -1179,11 +1225,10 @@ export default (
           }
         }
         if (_flowPromise) {
-          console.log('promise waiting...');
           return _flowPromise;
         }
-        console.log('requestin contracts...');
-        set(flowStore, {call: func, inProgress: true});
+        _call = func;
+        set(flowStore, {inProgress: true});
 
         _flowPromise = new Promise((resolve, reject) => {
           _flowResolve = resolve;
@@ -1215,14 +1260,14 @@ export default (
         return _flowPromise;
       },
       cancel() {
-        console.log('canceling...');
         if (_flowReject) {
           _flowReject({code: 1, message: 'Cancel'});
         }
         _flowPromise = undefined;
         _flowReject = undefined;
         _flowResolve = undefined;
-        set(flowStore, {call: undefined, inProgress: false, error: undefined});
+        _call = undefined;
+        set(flowStore, {inProgress: false, error: undefined});
       },
     },
   };
