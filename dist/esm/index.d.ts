@@ -38,6 +38,8 @@ export declare type ChainData = BaseData & {
 };
 export declare type FlowData = BaseData & {
     inProgress: boolean;
+    executing: boolean;
+    executionError: unknown | undefined;
 };
 export declare type WalletData = BaseData & {
     connecting: boolean;

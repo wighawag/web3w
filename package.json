@@ -1,9 +1,10 @@
 {
   "name": "web3w",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
   "browser": "dist/amd/index.js",
   "files": [
     "dist/"

@@ -163,6 +163,8 @@ declare module "index" {
     };
     export type FlowData = BaseData & {
         inProgress: boolean;
+        executing: boolean;
+        executionError: unknown | undefined;
     };
     export type WalletData = BaseData & {
         connecting: boolean;

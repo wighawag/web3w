@@ -55,6 +55,8 @@ const $wallet = {
 };
 const $flow = {
     inProgress: false,
+    executing: false,
+    executionError: undefined,
     error: undefined,
 };
 function store(data) {
@@ -505,20 +507,35 @@ function loadChain(chainId, address, newProviderRequired) {
             if (_flowResolve) {
                 const oldFlowResolve = _flowResolve;
                 if (_call) {
-                    _call(contractsToAdd)
-                        .then(() => {
-                        set(flowStore, { inProgress: false, error: undefined });
-                        oldFlowResolve(contractsToAdd);
-                        _flowPromise = undefined;
-                        _flowReject = undefined;
-                        _flowResolve = undefined;
-                    })
-                        .catch((err) => {
-                        set(flowStore, { error: err });
-                    });
+                    let result;
+                    try {
+                        result = _call(contractsToAdd); // TODO try catch ?
+                    }
+                    catch (e) {
+                        set(flowStore, { executionError: e, executing: false });
+                        return;
+                    }
+                    if ('then' in result) {
+                        set(flowStore, { error: undefined, executionError: undefined, executing: true });
+                        result
+                            .then(() => {
+                            set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
+                            oldFlowResolve(contractsToAdd);
+                            _flowPromise = undefined;
+                            _flowReject = undefined;
+                            _flowResolve = undefined;
+                        })
+                            .catch((err) => {
+                            set(flowStore, { executionError: err, executing: false });
+                        });
+                    }
+                    else {
+                        set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
+                        _flowResolve(contractsToAdd);
+                    }
                 }
                 else {
-                    set(flowStore, { inProgress: false, error: undefined });
+                    set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
                     _flowResolve(contractsToAdd);
                 }
             }
@@ -941,16 +958,24 @@ exports.default = (config) => {
                     else {
                         const contracts = $chain.contracts;
                         if (_call) {
-                            const result = _call(contracts);
+                            let result;
+                            try {
+                                result = _call(contracts); // TODO try catch ?
+                            }
+                            catch (e) {
+                                set(flowStore, { executionError: e, executing: false });
+                                return Promise.reject(e);
+                            }
                             if ('then' in result) {
+                                set(flowStore, { executing: true });
                                 return result
                                     .then(() => {
                                     _call = undefined;
-                                    set(flowStore, { inProgress: false, error: undefined });
+                                    set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
                                     return _flowResolve && _flowResolve(contracts);
                                 })
                                     .catch((err) => {
-                                    set(flowStore, { error: err });
+                                    set(flowStore, { executionError: err, executing: false });
                                     return Promise.reject(err);
                                 });
                             }
@@ -1000,18 +1025,25 @@ exports.default = (config) => {
                     else {
                         const contracts = $chain.contracts;
                         if (func) {
-                            const result = func(contracts);
+                            let result;
+                            try {
+                                result = func(contracts); // TODO try catch ?
+                            }
+                            catch (e) {
+                                set(flowStore, { executionError: e, executing: false });
+                                return Promise.reject(e);
+                            }
                             if ('then' in result) {
                                 _call = func;
-                                set(flowStore, { inProgress: true, error: undefined });
+                                set(flowStore, { inProgress: true, error: undefined, executing: true });
                                 return result
                                     .then(() => {
                                     _call = undefined;
-                                    set(flowStore, { inProgress: false, error: undefined });
+                                    set(flowStore, { inProgress: false, error: undefined, executionError: undefined });
                                     return contracts;
                                 })
                                     .catch((err) => {
-                                    set(flowStore, { error: err });
+                                    set(flowStore, { executionError: err, executing: false });
                                     return Promise.reject(err);
                                 });
                             }
@@ -1023,7 +1055,7 @@ exports.default = (config) => {
                     return _flowPromise;
                 }
                 _call = func;
-                set(flowStore, { inProgress: true });
+                set(flowStore, { inProgress: true, executing: false, executionError: undefined, error: undefined });
                 _flowPromise = new Promise((resolve, reject) => {
                     _flowResolve = resolve;
                     _flowReject = reject;
@@ -1060,7 +1092,7 @@ exports.default = (config) => {
                 _flowReject = undefined;
                 _flowResolve = undefined;
                 _call = undefined;
-                set(flowStore, { inProgress: false, error: undefined });
+                set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
             },
         },
     };
