@@ -127,7 +127,7 @@ export type WindowWeb3Provider = ExternalProvider & {
 
 export type Web3WModule = {
   id: string;
-  setup(options?: ModuleOptions): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
+  setup(options?: unknown): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
   logout(): Promise<void>;
 };
 

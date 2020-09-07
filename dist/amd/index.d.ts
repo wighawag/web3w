@@ -226,7 +226,7 @@ declare module "index" {
     };
     export type Web3WModule = {
         id: string;
-        setup(options?: ModuleOptions): Promise<{
+        setup(options?: unknown): Promise<{
             chainId: string;
             web3Provider: WindowWeb3Provider;
         }>;
