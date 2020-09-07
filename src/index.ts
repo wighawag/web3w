@@ -114,7 +114,7 @@ interface RequestArguments {
   readonly method: string;
   readonly params?: readonly unknown[] | unknown;
 }
-type WindowWeb3Provider = ExternalProvider & {
+export type WindowWeb3Provider = ExternalProvider & {
   sendAsync?(
     request: {method: string; params?: unknown[]},
     callback: (error: unknown, result: {jsonrpc: '2.0'; error?: unknown; result?: unknown}) => void

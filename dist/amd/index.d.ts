@@ -210,7 +210,7 @@ declare module "index" {
         readonly method: string;
         readonly params?: readonly unknown[] | unknown;
     }
-    type WindowWeb3Provider = ExternalProvider & {
+    export type WindowWeb3Provider = ExternalProvider & {
         sendAsync?(request: {
             method: string;
             params?: unknown[];

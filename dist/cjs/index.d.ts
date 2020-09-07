@@ -85,7 +85,7 @@ interface RequestArguments {
     readonly method: string;
     readonly params?: readonly unknown[] | unknown;
 }
-declare type WindowWeb3Provider = ExternalProvider & {
+export declare type WindowWeb3Provider = ExternalProvider & {
     sendAsync?(request: {
         method: string;
         params?: unknown[];
