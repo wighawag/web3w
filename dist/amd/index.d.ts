@@ -224,7 +224,7 @@ declare module "index" {
         on?(event: string, callback: AnyFunction): void;
         removeListener?(event: string, callback: AnyFunction): void;
     };
-    type Module = {
+    export type Web3WModule = {
         id: string;
         setup(options?: ModuleOptions): Promise<{
             chainId: string;
@@ -232,7 +232,7 @@ declare module "index" {
         }>;
         logout(): Promise<void>;
     };
-    type ModuleOptions = (string | Module)[];
+    type ModuleOptions = (string | Web3WModule)[];
     type ContractsInfos = {
         [name: string]: {
             address: string;

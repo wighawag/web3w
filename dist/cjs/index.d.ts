@@ -99,7 +99,7 @@ declare type WindowWeb3Provider = ExternalProvider & {
     on?(event: string, callback: AnyFunction): void;
     removeListener?(event: string, callback: AnyFunction): void;
 };
-declare type Module = {
+export declare type Web3WModule = {
     id: string;
     setup(options?: ModuleOptions): Promise<{
         chainId: string;
@@ -107,7 +107,7 @@ declare type Module = {
     }>;
     logout(): Promise<void>;
 };
-declare type ModuleOptions = (string | Module)[];
+declare type ModuleOptions = (string | Web3WModule)[];
 declare type ContractsInfos = {
     [name: string]: {
         address: string;
