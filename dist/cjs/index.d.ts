@@ -42,8 +42,9 @@ export declare type FlowData = BaseData & {
     executionError: unknown | undefined;
 };
 export declare type WalletData = BaseData & {
-    connecting: boolean;
     state: 'Idle' | 'Locked' | 'Ready';
+    connecting: boolean;
+    loadingModule: boolean;
     unlocking: boolean;
     address?: string;
     options: string[];
@@ -99,6 +100,10 @@ export declare type WindowWeb3Provider = ExternalProvider & {
     on?(event: string, callback: AnyFunction): void;
     removeListener?(event: string, callback: AnyFunction): void;
 };
+export declare type Web3WModuleLoader = {
+    id: string;
+    load(): Promise<Web3WModule>;
+};
 export declare type Web3WModule = {
     id: string;
     setup(options?: unknown): Promise<{
@@ -107,7 +112,7 @@ export declare type Web3WModule = {
     }>;
     logout(): Promise<void>;
 };
-declare type ModuleOptions = (string | Web3WModule)[];
+declare type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
 declare type ContractsInfos = {
     [name: string]: {
         address: string;

@@ -59,8 +59,9 @@ export type FlowData = BaseData & {
 };
 
 export type WalletData = BaseData & {
-  connecting: boolean;
   state: 'Idle' | 'Locked' | 'Ready';
+  connecting: boolean;
+  loadingModule: boolean;
   unlocking: boolean;
   address?: string;
   options: string[]; // wallet Types available
@@ -125,13 +126,18 @@ export type WindowWeb3Provider = ExternalProvider & {
   removeListener?(event: string, callback: AnyFunction): void;
 };
 
+export type Web3WModuleLoader = {
+  id: string;
+  load(): Promise<Web3WModule>;
+};
+
 export type Web3WModule = {
   id: string;
   setup(options?: unknown): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
   logout(): Promise<void>;
 };
 
-type ModuleOptions = (string | Web3WModule)[]; //TODO
+type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[]; //TODO
 type ContractsInfos = {[name: string]: {address: string; abi: Abi}};
 export type ChainConfig = {
   chainId: string;
@@ -203,6 +209,7 @@ interface ProviderRpcError extends Error {
 const $wallet: WalletData = {
   state: 'Idle', // Idle | Locked | Ready
   connecting: false,
+  loadingModule: false,
   unlocking: false,
   address: undefined,
   options: ['builtin'],
@@ -787,7 +794,7 @@ async function select(type: string, moduleConfig?: any) {
     await logout();
   }
 
-  let typeOrModule: string | Web3WModule = type;
+  let typeOrModule: string | Web3WModule | Web3WModuleLoader = type;
 
   if (!typeOrModule) {
     if (_options.length === 0) {
@@ -821,7 +828,7 @@ async function select(type: string, moduleConfig?: any) {
     _web3Provider = builtinWeb3Provider;
     _ethersProvider = proxyWeb3Provider(new Web3Provider(builtinWeb3Provider), _observers);
   } else {
-    let module: Web3WModule | undefined;
+    let module: Web3WModule | Web3WModuleLoader | undefined;
     if (typeof typeOrModule === 'string') {
       if (_options) {
         for (const choice of _options) {
@@ -846,18 +853,28 @@ async function select(type: string, moduleConfig?: any) {
     }
 
     try {
+      if ('load' in module) {
+        // if (module.loaded) {
+        //   module = module.loaded;
+        // } else {
+        set(walletStore, {loadingModule: true});
+        module = await module.load();
+        set(walletStore, {loadingModule: false});
+        // }
+      }
       const {web3Provider} = await module.setup(moduleConfig); // TODO pass config in select to choose network
       _web3Provider = web3Provider;
       _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
       _currentModule = module;
     } catch (e) {
       if (e.message === 'USER_CANCELED') {
-        set(walletStore, {connecting: false, selected: undefined});
+        set(walletStore, {connecting: false, selected: undefined, loadingModule: false});
       } else {
         set(walletStore, {
           error: {code: MODULE_ERROR, message: e.message},
           selected: undefined,
           connecting: false,
+          loadingModule: false,
         });
       }
       throw e;

@@ -44,6 +44,7 @@ const $chain = {
 const $wallet = {
     state: 'Idle',
     connecting: false,
+    loadingModule: false,
     unlocking: false,
     address: undefined,
     options: ['builtin'],
@@ -647,6 +648,15 @@ function select(type, moduleConfig) {
                 throw new Error(message);
             }
             try {
+                if ('load' in module) {
+                    // if (module.loaded) {
+                    //   module = module.loaded;
+                    // } else {
+                    set(walletStore, { loadingModule: true });
+                    module = yield module.load();
+                    set(walletStore, { loadingModule: false });
+                    // }
+                }
                 const { web3Provider } = yield module.setup(moduleConfig); // TODO pass config in select to choose network
                 _web3Provider = web3Provider;
                 _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
@@ -654,13 +664,14 @@ function select(type, moduleConfig) {
             }
             catch (e) {
                 if (e.message === 'USER_CANCELED') {
-                    set(walletStore, { connecting: false, selected: undefined });
+                    set(walletStore, { connecting: false, selected: undefined, loadingModule: false });
                 }
                 else {
                     set(walletStore, {
                         error: { code: MODULE_ERROR, message: e.message },
                         selected: undefined,
                         connecting: false,
+                        loadingModule: false,
                     });
                 }
                 throw e;

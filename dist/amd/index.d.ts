@@ -167,8 +167,9 @@ declare module "index" {
         executionError: unknown | undefined;
     };
     export type WalletData = BaseData & {
-        connecting: boolean;
         state: 'Idle' | 'Locked' | 'Ready';
+        connecting: boolean;
+        loadingModule: boolean;
         unlocking: boolean;
         address?: string;
         options: string[];
@@ -224,6 +225,10 @@ declare module "index" {
         on?(event: string, callback: AnyFunction): void;
         removeListener?(event: string, callback: AnyFunction): void;
     };
+    export type Web3WModuleLoader = {
+        id: string;
+        load(): Promise<Web3WModule>;
+    };
     export type Web3WModule = {
         id: string;
         setup(options?: unknown): Promise<{
@@ -232,7 +237,7 @@ declare module "index" {
         }>;
         logout(): Promise<void>;
     };
-    type ModuleOptions = (string | Web3WModule)[];
+    type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
     type ContractsInfos = {
         [name: string]: {
             address: string;
