@@ -44,6 +44,7 @@ export declare type FlowData = BaseData & {
 export declare type WalletData = BaseData & {
     state: 'Idle' | 'Locked' | 'Ready';
     connecting: boolean;
+    disconnecting: boolean;
     loadingModule: boolean;
     unlocking: boolean;
     address?: string;
@@ -110,7 +111,8 @@ export declare type Web3WModule = {
         chainId: string;
         web3Provider: WindowWeb3Provider;
     }>;
-    disconnect(): Promise<void>;
+    logout(): Promise<void>;
+    disconnect(): void;
 };
 declare type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
 declare type ContractsInfos = {
@@ -150,7 +152,10 @@ export declare type Web3wConfig = {
     autoSelectPrevious?: boolean;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
-declare function disconnect(): Promise<void>;
+declare function disconnect(config?: {
+    logout: boolean;
+    wait: boolean;
+}): Promise<void>;
 declare function unlock(): Promise<boolean>;
 declare const _default: (config: Web3wConfig) => {
     transactions: TransactionStore;

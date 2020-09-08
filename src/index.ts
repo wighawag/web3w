@@ -61,6 +61,7 @@ export type FlowData = BaseData & {
 export type WalletData = BaseData & {
   state: 'Idle' | 'Locked' | 'Ready';
   connecting: boolean;
+  disconnecting: boolean;
   loadingModule: boolean;
   unlocking: boolean;
   address?: string;
@@ -134,7 +135,8 @@ export type Web3WModuleLoader = {
 export type Web3WModule = {
   id: string;
   setup(options?: unknown): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
-  disconnect(): Promise<void>;
+  logout(): Promise<void>;
+  disconnect(): void;
 };
 
 type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[]; //TODO
@@ -209,6 +211,7 @@ interface ProviderRpcError extends Error {
 const $wallet: WalletData = {
   state: 'Idle', // Idle | Locked | Ready
   connecting: false,
+  disconnecting: false,
   loadingModule: false,
   unlocking: false,
   address: undefined,
@@ -997,6 +1000,8 @@ function acknowledgeError<T extends BaseData>(store: WritableWithData<T>): () =>
 }
 
 function _disconnect() {
+  stopListeningForChanges();
+  stopListeningForConnection();
   set(walletStore, {
     state: 'Idle',
     address: undefined,
@@ -1032,28 +1037,48 @@ function _disconnect() {
   recordSelection('');
 }
 
-function disconnect(): Promise<void> {
+function disconnect(config?: {logout: boolean; wait: boolean}): Promise<void> {
+  if ($wallet.disconnecting) {
+    throw new Error(`already disconnecting`);
+  }
+  const logout = config && config.logout;
+  const wait = config && config.wait;
   return new Promise<void>((resolve, reject) => {
-    stopListeningForChanges();
-    stopListeningForConnection();
     if (_currentModule) {
-      let p;
-      try {
-        p = _currentModule.disconnect();
-      } catch (e) {
-        reject(e);
-      }
-      if (p && 'then' in p) {
-        _currentModule = undefined;
-        p.then(_disconnect)
-          .then(() => {
+      if (logout) {
+        let p;
+        try {
+          p = _currentModule.logout();
+        } catch (e) {
+          reject(e);
+        }
+        if (wait && p && 'then' in p) {
+          set(walletStore, {disconnecting: true});
+          p.then(() => {
+            _currentModule && _currentModule.disconnect();
+            _currentModule = undefined;
+            _disconnect();
+            set(walletStore, {disconnecting: false});
             resolve();
-          })
-          .catch((e) => reject(e));
+          }).catch((e) => {
+            set(walletStore, {disconnecting: false, error: e});
+            reject(e);
+          });
+        } else {
+          _currentModule.disconnect();
+          _currentModule = undefined;
+          _disconnect();
+          resolve();
+        }
       } else {
+        _currentModule.disconnect();
         _currentModule = undefined;
+        _disconnect();
         resolve();
       }
+    } else {
+      _disconnect();
+      resolve();
     }
   });
 }

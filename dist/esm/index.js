@@ -44,6 +44,7 @@ const $chain = {
 const $wallet = {
     state: 'Idle',
     connecting: false,
+    disconnecting: false,
     loadingModule: false,
     unlocking: false,
     address: undefined,
@@ -794,6 +795,8 @@ function acknowledgeError(store) {
     };
 }
 function _disconnect() {
+    stopListeningForChanges();
+    stopListeningForConnection();
     set(walletStore, {
         state: 'Idle',
         address: undefined,
@@ -828,30 +831,52 @@ function _disconnect() {
     _flowPromise = undefined;
     recordSelection('');
 }
-function disconnect() {
+function disconnect(config) {
+    if ($wallet.disconnecting) {
+        throw new Error(`already disconnecting`);
+    }
+    const logout = config && config.logout;
+    const wait = config && config.wait;
     return new Promise((resolve, reject) => {
-        stopListeningForChanges();
-        stopListeningForConnection();
         if (_currentModule) {
-            let p;
-            try {
-                p = _currentModule.disconnect();
-            }
-            catch (e) {
-                reject(e);
-            }
-            if (p && 'then' in p) {
-                _currentModule = undefined;
-                p.then(_disconnect)
-                    .then(() => {
+            if (logout) {
+                let p;
+                try {
+                    p = _currentModule.logout();
+                }
+                catch (e) {
+                    reject(e);
+                }
+                if (wait && p && 'then' in p) {
+                    set(walletStore, { disconnecting: true });
+                    p.then(() => {
+                        _currentModule && _currentModule.disconnect();
+                        _currentModule = undefined;
+                        _disconnect();
+                        set(walletStore, { disconnecting: false });
+                        resolve();
+                    }).catch((e) => {
+                        set(walletStore, { disconnecting: false, error: e });
+                        reject(e);
+                    });
+                }
+                else {
+                    _currentModule.disconnect();
+                    _currentModule = undefined;
+                    _disconnect();
                     resolve();
-                })
-                    .catch((e) => reject(e));
+                }
             }
             else {
+                _currentModule.disconnect();
                 _currentModule = undefined;
+                _disconnect();
                 resolve();
             }
+        }
+        else {
+            _disconnect();
+            resolve();
         }
     });
 }

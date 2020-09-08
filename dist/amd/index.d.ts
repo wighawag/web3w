@@ -169,6 +169,7 @@ declare module "index" {
     export type WalletData = BaseData & {
         state: 'Idle' | 'Locked' | 'Ready';
         connecting: boolean;
+        disconnecting: boolean;
         loadingModule: boolean;
         unlocking: boolean;
         address?: string;
@@ -235,7 +236,8 @@ declare module "index" {
             chainId: string;
             web3Provider: WindowWeb3Provider;
         }>;
-        disconnect(): Promise<void>;
+        logout(): Promise<void>;
+        disconnect(): void;
     };
     type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
     type ContractsInfos = {
@@ -275,7 +277,10 @@ declare module "index" {
         autoSelectPrevious?: boolean;
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
-    function disconnect(): Promise<void>;
+    function disconnect(config?: {
+        logout: boolean;
+        wait: boolean;
+    }): Promise<void>;
     function unlock(): Promise<boolean>;
     const _default: (config: Web3wConfig) => {
         transactions: TransactionStore;
