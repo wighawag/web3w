@@ -73,7 +73,7 @@ export type WalletStore = Readable<WalletData> & {
   connect: typeof connect;
   unlock: typeof unlock;
   acknowledgeError: () => void;
-  logout: typeof logout;
+  disconnect: typeof disconnect;
   readonly options: string[];
   readonly address: string | undefined;
   readonly provider: JsonRpcProvider | undefined;
@@ -134,7 +134,7 @@ export type Web3WModuleLoader = {
 export type Web3WModule = {
   id: string;
   setup(options?: unknown): Promise<{chainId: string; web3Provider: WindowWeb3Provider}>;
-  logout(): Promise<void>;
+  disconnect(): Promise<void>;
 };
 
 type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[]; //TODO
@@ -791,7 +791,7 @@ function reAssignContracts(address: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function select(type: string, moduleConfig?: any) {
   if ($wallet.selected && ($wallet.state === 'Ready' || $wallet.state === 'Locked')) {
-    await logout();
+    await disconnect();
   }
 
   let typeOrModule: string | Web3WModule | Web3WModuleLoader = type;
@@ -996,13 +996,7 @@ function acknowledgeError<T extends BaseData>(store: WritableWithData<T>): () =>
   };
 }
 
-async function logout() {
-  stopListeningForChanges();
-  stopListeningForConnection();
-  if (_currentModule) {
-    await _currentModule.logout();
-    _currentModule = undefined;
-  }
+function _disconnect() {
   set(walletStore, {
     state: 'Idle',
     address: undefined,
@@ -1036,6 +1030,32 @@ async function logout() {
   _flowResolve = undefined;
   _flowPromise = undefined;
   recordSelection('');
+}
+
+function disconnect(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    stopListeningForChanges();
+    stopListeningForConnection();
+    if (_currentModule) {
+      let p;
+      try {
+        p = _currentModule.disconnect();
+      } catch (e) {
+        reject(e);
+      }
+      if (p && 'then' in p) {
+        _currentModule = undefined;
+        p.then(_disconnect)
+          .then(() => {
+            resolve();
+          })
+          .catch((e) => reject(e));
+      } else {
+        _currentModule = undefined;
+        resolve();
+      }
+    }
+  });
 }
 
 let unlocking: Promise<boolean> | undefined;
@@ -1168,7 +1188,7 @@ export default (
       connect,
       unlock,
       acknowledgeError: acknowledgeError(walletStore),
-      logout,
+      disconnect,
       get options() {
         return $wallet.options;
       },

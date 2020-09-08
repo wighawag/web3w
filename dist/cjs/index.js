@@ -589,7 +589,7 @@ function reAssignContracts(address) {
 function select(type, moduleConfig) {
     return __awaiter(this, void 0, void 0, function* () {
         if ($wallet.selected && ($wallet.state === 'Ready' || $wallet.state === 'Locked')) {
-            yield logout();
+            yield disconnect();
         }
         let typeOrModule = type;
         if (!typeOrModule) {
@@ -795,47 +795,66 @@ function acknowledgeError(store) {
         set(store, { error: undefined });
     };
 }
-function logout() {
-    return __awaiter(this, void 0, void 0, function* () {
+function _disconnect() {
+    set(walletStore, {
+        state: 'Idle',
+        address: undefined,
+        connecting: false,
+        unlocking: undefined,
+        selected: undefined,
+        error: undefined,
+    });
+    set(balanceStore, {
+        state: 'Idle',
+        amount: undefined,
+        error: undefined,
+        blockNumber: undefined,
+    });
+    set(chainStore, {
+        contracts: undefined,
+        addresses: undefined,
+        state: 'Idle',
+        notSupported: undefined,
+        chainId: undefined,
+        error: undefined,
+    });
+    set(flowStore, {
+        error: undefined,
+        executing: false,
+        executionError: undefined,
+        inProgress: false,
+    });
+    _call = undefined;
+    _flowReject = undefined;
+    _flowResolve = undefined;
+    _flowPromise = undefined;
+    recordSelection('');
+}
+function disconnect() {
+    return new Promise((resolve, reject) => {
         stopListeningForChanges();
         stopListeningForConnection();
         if (_currentModule) {
-            yield _currentModule.logout();
-            _currentModule = undefined;
+            let p;
+            try {
+                p = _currentModule.disconnect();
+            }
+            catch (e) {
+                reject(e);
+            }
+            if (p && 'then' in p) {
+                _currentModule = undefined;
+                p.then(_disconnect)
+                    .then(() => {
+                    resolve();
+                })
+                    .catch((e) => reject(e));
+            }
+            else {
+                _currentModule = undefined;
+                resolve();
+            }
         }
-        set(walletStore, {
-            state: 'Idle',
-            address: undefined,
-            connecting: false,
-            unlocking: undefined,
-            selected: undefined,
-            error: undefined,
-        });
-        set(balanceStore, {
-            state: 'Idle',
-            amount: undefined,
-            error: undefined,
-            blockNumber: undefined,
-        });
-        set(chainStore, {
-            contracts: undefined,
-            addresses: undefined,
-            state: 'Idle',
-            notSupported: undefined,
-            chainId: undefined,
-            error: undefined,
-        });
-        set(flowStore, {
-            error: undefined,
-            executing: false,
-            executionError: undefined,
-            inProgress: false,
-        });
-        _call = undefined;
-        _flowReject = undefined;
-        _flowResolve = undefined;
-        _flowPromise = undefined;
-        recordSelection('');
     });
 }
 let unlocking;
@@ -957,7 +976,7 @@ exports.default = (config) => {
             connect,
             unlock,
             acknowledgeError: acknowledgeError(walletStore),
-            logout,
+            disconnect,
             get options() {
                 return $wallet.options;
             },

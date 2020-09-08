@@ -55,7 +55,7 @@ export declare type WalletStore = Readable<WalletData> & {
     connect: typeof connect;
     unlock: typeof unlock;
     acknowledgeError: () => void;
-    logout: typeof logout;
+    disconnect: typeof disconnect;
     readonly options: string[];
     readonly address: string | undefined;
     readonly provider: JsonRpcProvider | undefined;
@@ -110,7 +110,7 @@ export declare type Web3WModule = {
         chainId: string;
         web3Provider: WindowWeb3Provider;
     }>;
-    logout(): Promise<void>;
+    disconnect(): Promise<void>;
 };
 declare type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
 declare type ContractsInfos = {
@@ -150,7 +150,7 @@ export declare type Web3wConfig = {
     autoSelectPrevious?: boolean;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
-declare function logout(): Promise<void>;
+declare function disconnect(): Promise<void>;
 declare function unlock(): Promise<boolean>;
 declare const _default: (config: Web3wConfig) => {
     transactions: TransactionStore;

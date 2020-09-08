@@ -180,7 +180,7 @@ declare module "index" {
         connect: typeof connect;
         unlock: typeof unlock;
         acknowledgeError: () => void;
-        logout: typeof logout;
+        disconnect: typeof disconnect;
         readonly options: string[];
         readonly address: string | undefined;
         readonly provider: JsonRpcProvider | undefined;
@@ -235,7 +235,7 @@ declare module "index" {
             chainId: string;
             web3Provider: WindowWeb3Provider;
         }>;
-        logout(): Promise<void>;
+        disconnect(): Promise<void>;
     };
     type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
     type ContractsInfos = {
@@ -275,7 +275,7 @@ declare module "index" {
         autoSelectPrevious?: boolean;
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
-    function logout(): Promise<void>;
+    function disconnect(): Promise<void>;
     function unlock(): Promise<boolean>;
     const _default: (config: Web3wConfig) => {
         transactions: TransactionStore;
