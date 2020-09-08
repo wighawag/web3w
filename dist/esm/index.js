@@ -696,7 +696,7 @@ function select(type, moduleConfig) {
             }
             else {
                 // TODO timeout warning
-                accounts = yield timeout(20000, _ethersProvider.listAccounts());
+                accounts = yield _ethersProvider.listAccounts();
             }
         }
         catch (e) {
