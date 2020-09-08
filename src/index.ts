@@ -901,7 +901,7 @@ async function select(type: string, moduleConfig?: any) {
       }); // TODO timeout checks (metamask, portis)
     } else {
       // TODO timeout warning
-      accounts = await timeout(20000, _ethersProvider.listAccounts());
+      accounts = await _ethersProvider.listAccounts();
     }
   } catch (e) {
     set(walletStore, {error: e, selected: undefined, connecting: false});
