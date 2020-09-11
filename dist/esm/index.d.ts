@@ -67,6 +67,7 @@ export declare type WalletStore = Readable<WalletData> & {
 };
 export declare type FlowStore = Readable<FlowData> & {
     execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
+    connect(): Promise<Contracts>;
     retry(): Promise<void>;
     cancel(): void;
 };

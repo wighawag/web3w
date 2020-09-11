@@ -192,6 +192,7 @@ declare module "index" {
     };
     export type FlowStore = Readable<FlowData> & {
         execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
+        connect(): Promise<Contracts>;
         retry(): Promise<void>;
         cancel(): void;
     };
