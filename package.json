@@ -1,11 +1,10 @@
 {
   "name": "web3w",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
-  "main": "dist/cjs/index.js",
+  "main": "dist/amd/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
-  "browser": "dist/umd/index.js",
   "files": [
     "dist/"
   ],
@@ -49,7 +48,7 @@
     "build:cjs": "rimraf dist/cjs && tsc -p tsconfig-cjs.json",
     "build:amd": "rimraf dist/amd && tsc -p tsconfig-amd.json && terser-folder dist/amd -e -x .js -o dist/amd --config-file terser.json",
     "build:umd": "rimraf dist/umd && tsc -p tsconfig-umd.json && terser-folder dist/umd -e -x .js -o dist/umd --config-file terser.json",
-    "build": "run-s build:esm build:cjs build:amd build:umd",
+    "build": "run-s build:esm build:amd build:umd build:cjs",
     "lint": "eslint src/**/*.{js,ts,tsx} --quiet --fix"
   },
   "dependencies": {
