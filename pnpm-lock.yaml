@@ -1,5 +1,5 @@
 dependencies:
-  named-logs: 0.0.6
+  named-logs: 0.0.7
 devDependencies:
   '@ethersproject/bignumber': 5.0.6
   '@ethersproject/contracts': 5.0.3
@@ -1217,10 +1217,10 @@ packages:
     dev: true
     resolution:
       integrity: sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==
-  /named-logs/0.0.6:
+  /named-logs/0.0.7:
     dev: false
     resolution:
-      integrity: sha512-NlJ2EMkBdyWwuPergQr/td6BbsRylt2azPwbIE8kV7xYieBdaJiI7YVoqp0o0h8SaPoD01ItlKdyno9Q+bUyRw==
+      integrity: sha512-xbqRux9MvsrhHznfEg564LpiqBjszLFQmu0lyFY9Ro+EwI+pXKsLYYg5X1x5U3bYnu0mBpuw85z/DOZL94NCIg==
   /natural-compare/1.4.0:
     dev: true
     resolution:
@@ -1874,7 +1874,7 @@ specifiers:
   eslint: ^7.7.0
   eslint-config-prettier: ^6.11.0
   eslint-plugin-prettier: ^3.1.4
-  named-logs: ^0.0.6
+  named-logs: ^0.0.7
   npm-run-all: ^4.1.5
   prettier: ^2.0.5
   rimraf: ^3.0.2
