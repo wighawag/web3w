@@ -1043,7 +1043,7 @@ function _disconnect(keepFlow?: boolean) {
   recordSelection('');
 }
 
-function disconnect(config?: {logout: boolean; wait: boolean; keepFlow: boolean}): Promise<void> {
+function disconnect(config?: {logout?: boolean; wait?: boolean; keepFlow: boolean}): Promise<void> {
   if ($wallet.disconnecting) {
     throw new Error(`already disconnecting`);
   }
@@ -1263,7 +1263,7 @@ function flow(
   });
 
   if (type && type !== $wallet.selected) {
-    disconnect()
+    disconnect({keepFlow: true})
       .catch((error) => {
         set(flowStore, {error});
         // _flowReject && _flowReject(error);
