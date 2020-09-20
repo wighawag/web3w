@@ -154,8 +154,8 @@ export declare type Web3wConfig = {
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
 declare function disconnect(config?: {
-    logout: boolean;
-    wait: boolean;
+    logout?: boolean;
+    wait?: boolean;
     keepFlow: boolean;
 }): Promise<void>;
 declare function unlock(): Promise<boolean>;

@@ -1059,7 +1059,7 @@ function flow(func, type, moduleConfig) {
         _flowReject = reject;
     });
     if (type && type !== $wallet.selected) {
-        disconnect()
+        disconnect({ keepFlow: true })
             .catch((error) => {
             set(flowStore, { error });
             // _flowReject && _flowReject(error);

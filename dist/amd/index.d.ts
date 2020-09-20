@@ -279,8 +279,8 @@ declare module "index" {
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
     function disconnect(config?: {
-        logout: boolean;
-        wait: boolean;
+        logout?: boolean;
+        wait?: boolean;
         keepFlow: boolean;
     }): Promise<void>;
     function unlock(): Promise<boolean>;
