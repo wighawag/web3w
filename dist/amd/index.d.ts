@@ -130,6 +130,7 @@ declare module "index" {
     type ErrorData = {
         code: number;
         message: string;
+        errorObject?: unknown;
     };
     type BaseData = {
         error?: ErrorData;

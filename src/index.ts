@@ -19,7 +19,7 @@ import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FA
 
 const console = logs('web3w:index');
 
-type ErrorData = {code: number; message: string};
+type ErrorData = {code: number; message: string; errorObject?: unknown};
 
 type BaseData = {
   error?: ErrorData;
@@ -1274,7 +1274,9 @@ function flow(
         })
         .then(() => {
           connect(type, moduleConfig).catch((error) => {
-            set(flowStore, {error});
+            set(flowStore, {error: {code: 11, message: `failed to connect to ${type}`, errorObject: error}});
+            // reject the flow here as the type chosen failed
+            disconnect();
             // _flowReject && _flowReject(error);
             // _flowPromise = undefined;
             // _flowReject = undefined;
@@ -1283,7 +1285,9 @@ function flow(
         });
     } else {
       connect(type, moduleConfig).catch((error) => {
-        set(flowStore, {error});
+        set(flowStore, {error: {code: 11, message: `failed to connect to ${type}`, errorObject: error}});
+        // reject the flow here as the type chosen failed
+        disconnect();
         // _flowReject && _flowReject(error);
         // _flowPromise = undefined;
         // _flowReject = undefined;

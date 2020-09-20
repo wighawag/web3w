@@ -5,6 +5,7 @@ import { Readable } from './utils/internals';
 declare type ErrorData = {
     code: number;
     message: string;
+    errorObject?: unknown;
 };
 declare type BaseData = {
     error?: ErrorData;

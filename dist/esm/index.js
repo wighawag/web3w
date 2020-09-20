@@ -1068,7 +1068,9 @@ function flow(func, type, moduleConfig) {
             })
                 .then(() => {
                 connect(type, moduleConfig).catch((error) => {
-                    set(flowStore, { error });
+                    set(flowStore, { error: { code: 11, message: `failed to connect to ${type}`, errorObject: error } });
+                    // reject the flow here as the type chosen failed
+                    disconnect();
                     // _flowReject && _flowReject(error);
                     // _flowPromise = undefined;
                     // _flowReject = undefined;
@@ -1078,7 +1080,9 @@ function flow(func, type, moduleConfig) {
         }
         else {
             connect(type, moduleConfig).catch((error) => {
-                set(flowStore, { error });
+                set(flowStore, { error: { code: 11, message: `failed to connect to ${type}`, errorObject: error } });
+                // reject the flow here as the type chosen failed
+                disconnect();
                 // _flowReject && _flowReject(error);
                 // _flowPromise = undefined;
                 // _flowReject = undefined;
