@@ -542,11 +542,17 @@ function loadChain(chainId, address, newProviderRequired) {
                     else {
                         set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
                         _flowResolve(contractsToAdd);
+                        _flowPromise = undefined;
+                        _flowReject = undefined;
+                        _flowResolve = undefined;
                     }
                 }
                 else {
                     set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
                     _flowResolve(contractsToAdd);
+                    _flowPromise = undefined;
+                    _flowReject = undefined;
+                    _flowResolve = undefined;
                 }
             }
         }
