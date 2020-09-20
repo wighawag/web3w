@@ -829,11 +829,11 @@ function _disconnect(keepFlow) {
             executionError: undefined,
             inProgress: false,
         });
+        _call = undefined;
+        _flowReject = undefined;
+        _flowResolve = undefined;
+        _flowPromise = undefined;
     }
-    _call = undefined;
-    _flowReject = undefined;
-    _flowResolve = undefined;
-    _flowPromise = undefined;
     recordSelection('');
 }
 function disconnect(config) {
@@ -1057,15 +1057,26 @@ function flow(func, type, moduleConfig) {
         _flowReject = reject;
     });
     if (type && type !== $wallet.selected) {
-        disconnect({ keepFlow: true })
-            .catch((error) => {
-            set(flowStore, { error });
-            // _flowReject && _flowReject(error);
-            // _flowPromise = undefined;
-            // _flowReject = undefined;
-            // _flowResolve = undefined;
-        })
-            .then(() => {
+        if ($wallet.selected) {
+            disconnect({ keepFlow: true })
+                .catch((error) => {
+                set(flowStore, { error });
+                // _flowReject && _flowReject(error);
+                // _flowPromise = undefined;
+                // _flowReject = undefined;
+                // _flowResolve = undefined;
+            })
+                .then(() => {
+                connect(type, moduleConfig).catch((error) => {
+                    set(flowStore, { error });
+                    // _flowReject && _flowReject(error);
+                    // _flowPromise = undefined;
+                    // _flowReject = undefined;
+                    // _flowResolve = undefined;
+                });
+            });
+        }
+        else {
             connect(type, moduleConfig).catch((error) => {
                 set(flowStore, { error });
                 // _flowReject && _flowReject(error);
@@ -1073,7 +1084,7 @@ function flow(func, type, moduleConfig) {
                 // _flowReject = undefined;
                 // _flowResolve = undefined;
             });
-        });
+        }
     }
     else if ($wallet.state === 'Locked') {
         if (_config.flow && _config.flow.autoUnlock) {

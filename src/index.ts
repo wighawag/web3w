@@ -1035,11 +1035,11 @@ function _disconnect(keepFlow?: boolean) {
       executionError: undefined,
       inProgress: false,
     });
+    _call = undefined;
+    _flowReject = undefined;
+    _flowResolve = undefined;
+    _flowPromise = undefined;
   }
-  _call = undefined;
-  _flowReject = undefined;
-  _flowResolve = undefined;
-  _flowPromise = undefined;
   recordSelection('');
 }
 
@@ -1263,23 +1263,33 @@ function flow(
   });
 
   if (type && type !== $wallet.selected) {
-    disconnect({keepFlow: true})
-      .catch((error) => {
-        set(flowStore, {error});
-        // _flowReject && _flowReject(error);
-        // _flowPromise = undefined;
-        // _flowReject = undefined;
-        // _flowResolve = undefined;
-      })
-      .then(() => {
-        connect(type, moduleConfig).catch((error) => {
+    if ($wallet.selected) {
+      disconnect({keepFlow: true})
+        .catch((error) => {
           set(flowStore, {error});
           // _flowReject && _flowReject(error);
           // _flowPromise = undefined;
           // _flowReject = undefined;
           // _flowResolve = undefined;
+        })
+        .then(() => {
+          connect(type, moduleConfig).catch((error) => {
+            set(flowStore, {error});
+            // _flowReject && _flowReject(error);
+            // _flowPromise = undefined;
+            // _flowReject = undefined;
+            // _flowResolve = undefined;
+          });
         });
+    } else {
+      connect(type, moduleConfig).catch((error) => {
+        set(flowStore, {error});
+        // _flowReject && _flowReject(error);
+        // _flowPromise = undefined;
+        // _flowReject = undefined;
+        // _flowResolve = undefined;
       });
+    }
   } else if ($wallet.state === 'Locked') {
     if (_config.flow && _config.flow.autoUnlock) {
       unlock().catch((error) => {
