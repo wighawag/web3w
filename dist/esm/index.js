@@ -797,7 +797,7 @@ function acknowledgeError(store) {
         set(store, { error: undefined });
     };
 }
-function _disconnect() {
+function _disconnect(keepFlow) {
     stopListeningForChanges();
     stopListeningForConnection();
     set(walletStore, {
@@ -822,12 +822,14 @@ function _disconnect() {
         chainId: undefined,
         error: undefined,
     });
-    set(flowStore, {
-        error: undefined,
-        executing: false,
-        executionError: undefined,
-        inProgress: false,
-    });
+    if (!keepFlow) {
+        set(flowStore, {
+            error: undefined,
+            executing: false,
+            executionError: undefined,
+            inProgress: false,
+        });
+    }
     _call = undefined;
     _flowReject = undefined;
     _flowResolve = undefined;
@@ -840,6 +842,7 @@ function disconnect(config) {
     }
     const logout = config && config.logout;
     const wait = config && config.wait;
+    const keepFlow = config && config.keepFlow;
     return new Promise((resolve, reject) => {
         if (_currentModule) {
             if (logout) {
@@ -855,7 +858,7 @@ function disconnect(config) {
                     p.then(() => {
                         _currentModule && _currentModule.disconnect();
                         _currentModule = undefined;
-                        _disconnect();
+                        _disconnect(keepFlow);
                         set(walletStore, { disconnecting: false });
                         resolve();
                     }).catch((e) => {
@@ -866,19 +869,19 @@ function disconnect(config) {
                 else {
                     _currentModule.disconnect();
                     _currentModule = undefined;
-                    _disconnect();
+                    _disconnect(keepFlow);
                     resolve();
                 }
             }
             else {
                 _currentModule.disconnect();
                 _currentModule = undefined;
-                _disconnect();
+                _disconnect(keepFlow);
                 resolve();
             }
         }
         else {
-            _disconnect();
+            _disconnect(keepFlow);
             resolve();
         }
     });

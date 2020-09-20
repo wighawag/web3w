@@ -281,6 +281,7 @@ declare module "index" {
     function disconnect(config?: {
         logout: boolean;
         wait: boolean;
+        keepFlow: boolean;
     }): Promise<void>;
     function unlock(): Promise<boolean>;
     function flow(func?: (contracts: Contracts) => Promise<void>, type?: string, moduleConfig?: unknown): Promise<Contracts>;

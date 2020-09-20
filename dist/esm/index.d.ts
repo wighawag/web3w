@@ -156,6 +156,7 @@ declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>
 declare function disconnect(config?: {
     logout: boolean;
     wait: boolean;
+    keepFlow: boolean;
 }): Promise<void>;
 declare function unlock(): Promise<boolean>;
 declare function flow(func?: (contracts: Contracts) => Promise<void>, type?: string, moduleConfig?: unknown): Promise<Contracts>;

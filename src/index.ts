@@ -1003,7 +1003,7 @@ function acknowledgeError<T extends BaseData>(store: WritableWithData<T>): () =>
   };
 }
 
-function _disconnect() {
+function _disconnect(keepFlow?: boolean) {
   stopListeningForChanges();
   stopListeningForConnection();
   set(walletStore, {
@@ -1028,12 +1028,14 @@ function _disconnect() {
     chainId: undefined,
     error: undefined,
   });
-  set(flowStore, {
-    error: undefined,
-    executing: false,
-    executionError: undefined,
-    inProgress: false,
-  });
+  if (!keepFlow) {
+    set(flowStore, {
+      error: undefined,
+      executing: false,
+      executionError: undefined,
+      inProgress: false,
+    });
+  }
   _call = undefined;
   _flowReject = undefined;
   _flowResolve = undefined;
@@ -1041,12 +1043,13 @@ function _disconnect() {
   recordSelection('');
 }
 
-function disconnect(config?: {logout: boolean; wait: boolean}): Promise<void> {
+function disconnect(config?: {logout: boolean; wait: boolean; keepFlow: boolean}): Promise<void> {
   if ($wallet.disconnecting) {
     throw new Error(`already disconnecting`);
   }
   const logout = config && config.logout;
   const wait = config && config.wait;
+  const keepFlow = config && config.keepFlow;
   return new Promise<void>((resolve, reject) => {
     if (_currentModule) {
       if (logout) {
@@ -1061,7 +1064,7 @@ function disconnect(config?: {logout: boolean; wait: boolean}): Promise<void> {
           p.then(() => {
             _currentModule && _currentModule.disconnect();
             _currentModule = undefined;
-            _disconnect();
+            _disconnect(keepFlow);
             set(walletStore, {disconnecting: false});
             resolve();
           }).catch((e) => {
@@ -1071,17 +1074,17 @@ function disconnect(config?: {logout: boolean; wait: boolean}): Promise<void> {
         } else {
           _currentModule.disconnect();
           _currentModule = undefined;
-          _disconnect();
+          _disconnect(keepFlow);
           resolve();
         }
       } else {
         _currentModule.disconnect();
         _currentModule = undefined;
-        _disconnect();
+        _disconnect(keepFlow);
         resolve();
       }
     } else {
-      _disconnect();
+      _disconnect(keepFlow);
       resolve();
     }
   });
