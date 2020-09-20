@@ -67,7 +67,7 @@ export declare type WalletStore = Readable<WalletData> & {
 };
 export declare type FlowStore = Readable<FlowData> & {
     execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
-    connect(): Promise<Contracts>;
+    connect(type?: string, moduleConfig?: unknown): Promise<Contracts>;
     retry(): Promise<void>;
     cancel(): void;
 };
@@ -158,6 +158,7 @@ declare function disconnect(config?: {
     wait: boolean;
 }): Promise<void>;
 declare function unlock(): Promise<boolean>;
+declare function flow(func?: (contracts: Contracts) => Promise<void>, type?: string, moduleConfig?: unknown): Promise<Contracts>;
 declare const _default: (config: Web3wConfig) => {
     transactions: TransactionStore;
     balance: BalanceStore;

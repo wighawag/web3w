@@ -86,7 +86,7 @@ export type WalletStore = Readable<WalletData> & {
 
 export type FlowStore = Readable<FlowData> & {
   execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
-  connect(): Promise<Contracts>;
+  connect(type?: string, moduleConfig?: unknown): Promise<Contracts>;
   retry(): Promise<void>;
   cancel(): void;
 };
@@ -997,7 +997,9 @@ async function connect(type: string, moduleConfig?: unknown) {
 
 function acknowledgeError<T extends BaseData>(store: WritableWithData<T>): () => void {
   return () => {
-    set(store, {error: undefined});
+    // For some reason typescript type checking in vscode fails here :
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    set<T>(store, {error: undefined} as any);
   };
 }
 
@@ -1192,18 +1194,26 @@ function flow_retry(): Promise<void> {
   return _flowPromise.then(() => undefined);
 }
 
-function flow_connect(): Promise<Contracts> {
+function flow_connect(type?: string, moduleConfig?: unknown): Promise<Contracts> {
   if ($flow.inProgress) {
     flow_cancel();
   }
-  return flow_execute();
+  return flow(undefined, type, moduleConfig);
 }
 
 function flow_execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts> {
+  return flow(func);
+}
+
+function flow(
+  func?: (contracts: Contracts) => Promise<void>,
+  type?: string,
+  moduleConfig?: unknown
+): Promise<Contracts> {
   if ($flow.inProgress) {
     throw new Error(`flow in progress`);
   }
-  if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
+  if ($chain.state === 'Ready' && $wallet.state === 'Ready' && (!type || type === $wallet.selected)) {
     _flowReject = undefined;
     _flowResolve = undefined;
     _flowPromise = undefined;
@@ -1249,7 +1259,25 @@ function flow_execute(func?: (contracts: Contracts) => Promise<void>): Promise<C
     _flowReject = reject;
   });
 
-  if ($wallet.state === 'Locked') {
+  if (type && type !== $wallet.selected) {
+    disconnect()
+      .catch((error) => {
+        set(flowStore, {error});
+        // _flowReject && _flowReject(error);
+        // _flowPromise = undefined;
+        // _flowReject = undefined;
+        // _flowResolve = undefined;
+      })
+      .then(() => {
+        connect(type, moduleConfig).catch((error) => {
+          set(flowStore, {error});
+          // _flowReject && _flowReject(error);
+          // _flowPromise = undefined;
+          // _flowReject = undefined;
+          // _flowResolve = undefined;
+        });
+      });
+  } else if ($wallet.state === 'Locked') {
     if (_config.flow && _config.flow.autoUnlock) {
       unlock().catch((error) => {
         set(flowStore, {error});

@@ -192,7 +192,7 @@ declare module "index" {
     };
     export type FlowStore = Readable<FlowData> & {
         execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
-        connect(): Promise<Contracts>;
+        connect(type?: string, moduleConfig?: unknown): Promise<Contracts>;
         retry(): Promise<void>;
         cancel(): void;
     };
@@ -283,6 +283,7 @@ declare module "index" {
         wait: boolean;
     }): Promise<void>;
     function unlock(): Promise<boolean>;
+    function flow(func?: (contracts: Contracts) => Promise<void>, type?: string, moduleConfig?: unknown): Promise<Contracts>;
     const _default: (config: Web3wConfig) => {
         transactions: TransactionStore;
         balance: BalanceStore;

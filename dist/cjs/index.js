@@ -794,6 +794,8 @@ function connect(type, moduleConfig) {
 }
 function acknowledgeError(store) {
     return () => {
+        // For some reason typescript type checking in vscode fails here :
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         set(store, { error: undefined });
     };
 }
@@ -994,17 +996,20 @@ function flow_retry() {
     }
     return _flowPromise.then(() => undefined);
 }
-function flow_connect() {
+function flow_connect(type, moduleConfig) {
     if ($flow.inProgress) {
         flow_cancel();
     }
-    return flow_execute();
+    return flow(undefined, type, moduleConfig);
 }
 function flow_execute(func) {
+    return flow(func);
+}
+function flow(func, type, moduleConfig) {
     if ($flow.inProgress) {
         throw new Error(`flow in progress`);
     }
-    if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
+    if ($chain.state === 'Ready' && $wallet.state === 'Ready' && (!type || type === $wallet.selected)) {
         _flowReject = undefined;
         _flowResolve = undefined;
         _flowPromise = undefined;
@@ -1050,7 +1055,26 @@ function flow_execute(func) {
         _flowResolve = resolve;
         _flowReject = reject;
     });
-    if ($wallet.state === 'Locked') {
+    if (type && type !== $wallet.selected) {
+        disconnect()
+            .catch((error) => {
+            set(flowStore, { error });
+            // _flowReject && _flowReject(error);
+            // _flowPromise = undefined;
+            // _flowReject = undefined;
+            // _flowResolve = undefined;
+        })
+            .then(() => {
+            connect(type, moduleConfig).catch((error) => {
+                set(flowStore, { error });
+                // _flowReject && _flowReject(error);
+                // _flowPromise = undefined;
+                // _flowReject = undefined;
+                // _flowResolve = undefined;
+            });
+        });
+    }
+    else if ($wallet.state === 'Locked') {
         if (_config.flow && _config.flow.autoUnlock) {
             unlock().catch((error) => {
                 set(flowStore, { error });
