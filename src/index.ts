@@ -448,9 +448,14 @@ function stopListeningForChanges() {
   }
 }
 
-function onConnect({chainId}: {chainId: string}) {
-  const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
-  console.debug('onConnect', {chainId, chainIdAsDecimal}); // TODO
+function onConnect(connection: {chainId: string}) {
+  const chainId = connection && connection.chainId;
+  if (chainId) {
+    const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
+    console.debug('onConnect', {chainId, chainIdAsDecimal}); // TODO
+  } else {
+    console.warn('onConnect', 'no connection object passed in');
+  }
 }
 
 function onDisconnect(error?: ProviderRpcError) {
