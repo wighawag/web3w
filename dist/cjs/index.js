@@ -673,7 +673,9 @@ function select(type, moduleConfig) {
                     set(walletStore, { loadingModule: false });
                     // }
                 }
+                console.log(`setting up module`);
                 const { web3Provider } = yield module.setup(moduleConfig); // TODO pass config in select to choose network
+                console.log(`module setup`);
                 _web3Provider = web3Provider;
                 _ethersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(_web3Provider), _observers);
                 _currentModule = module;
@@ -712,7 +714,9 @@ function select(type, moduleConfig) {
             }
             else {
                 // TODO timeout warning
+                console.log(`fetching accounts...`);
                 accounts = yield _ethersProvider.listAccounts();
+                console.log(`accounts: ${accounts}`);
             }
         }
         catch (e) {
