@@ -1,6 +1,6 @@
 {
   "name": "web3w",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/amd/index.js",
   "module": "dist/esm/index.js",
@@ -52,6 +52,6 @@
     "lint": "eslint src/**/*.{js,ts,tsx} --quiet --fix"
   },
   "dependencies": {
-    "named-logs": "^0.0.12"
+    "named-logs": "0.0.13"
   }
 }
