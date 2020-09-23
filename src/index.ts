@@ -17,7 +17,7 @@ import {Writable, Readable} from './utils/internals';
 import {logs} from 'named-logs';
 import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET} from './errors';
 
-const console = logs('web3w:index');
+const logger = logs('web3w:index');
 
 type ErrorData = {code: number; message: string; errorObject?: unknown};
 
@@ -264,9 +264,9 @@ function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
     }
   }
   try {
-    console.debug(JSON.stringify(store.data, null, '  '));
+    logger.debug(JSON.stringify(store.data, null, '  '));
   } catch (e) {
-    console.error(e, store.data);
+    logger.error(e, store.data);
   }
   store.set(store.data);
 }
@@ -304,14 +304,14 @@ let _call: ((contracts: Contracts) => Promise<void>) | undefined;
 
 async function onChainChanged(chainId: string) {
   if (chainId === '0xNaN') {
-    console.warn('onChainChanged bug (return 0xNaN), metamask bug?');
+    logger.warn('onChainChanged bug (return 0xNaN), metamask bug?');
     if (!_web3Provider) {
       throw new Error('no web3Provider to get chainId');
     }
     chainId = await providerSend(_web3Provider, 'eth_chainId');
   }
   const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
-  console.debug('onChainChanged', {chainId, chainIdAsDecimal}); // TODO
+  logger.debug('onChainChanged', {chainId, chainIdAsDecimal}); // TODO
   set(chainStore, {
     contracts: undefined,
     addresses: undefined,
@@ -320,7 +320,7 @@ async function onChainChanged(chainId: string) {
     notSupported: undefined,
   });
   if ($wallet.address) {
-    console.log('LOAD_CHAIN from chainChanged');
+    logger.log('LOAD_CHAIN from chainChanged');
     await loadChain(chainIdAsDecimal, $wallet.address, true);
   }
 }
@@ -332,16 +332,16 @@ function hasAccountsChanged(accounts: string[]): boolean {
 
 async function onAccountsChanged(accounts: string[]) {
   if (!hasAccountsChanged(accounts)) {
-    console.debug('false account changed', accounts);
+    logger.debug('false account changed', accounts);
     return;
   }
-  console.debug('onAccountsChanged', {accounts}); // TODO
+  logger.debug('onAccountsChanged', {accounts}); // TODO
   const address = accounts[0];
   if (address) {
     set(walletStore, {address, state: 'Ready'});
     if ($chain.state === 'Connected') {
       if ($chain.chainId) {
-        console.log('LOAD_CHAIN from accountsChanged');
+        logger.log('LOAD_CHAIN from accountsChanged');
         await loadChain($chain.chainId, address, false);
       } else {
         throw new Error('no chainId while connected');
@@ -392,7 +392,7 @@ async function pollChainChanged(web3Provider: WindowWeb3Provider, callback: (cha
       try {
         callback(chainId);
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         // TODO error in chain.error
       }
     }
@@ -407,13 +407,13 @@ async function pollAccountsChanged(web3Provider: WindowWeb3Provider, callback: (
       accounts = await providerSend(web3Provider, 'eth_accounts');
     } catch (e) {}
 
-    console.debug({accounts}); // TODO remove
+    logger.debug({accounts}); // TODO remove
     if (_listenning && hasAccountsChanged(accounts)) {
       // TODO multi account support ?
       try {
         callback(accounts);
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         // TODO error in wallet.error
       }
     }
@@ -423,7 +423,7 @@ async function pollAccountsChanged(web3Provider: WindowWeb3Provider, callback: (
 
 function listenForChanges() {
   if (_web3Provider && !_listenning) {
-    console.log('LISTENNING');
+    logger.log('LISTENNING');
     if (_web3Provider.on) {
       _web3Provider.on('chainChanged', onChainChanged);
       _web3Provider.on('accountsChanged', onAccountsChanged);
@@ -440,8 +440,8 @@ function listenForChanges() {
 
 function stopListeningForChanges() {
   if (_web3Provider && _listenning) {
-    console.log('STOP LISTENNING');
-    console.debug('stop listenning for changes...');
+    logger.log('STOP LISTENNING');
+    logger.debug('stop listenning for changes...');
     _web3Provider.removeListener && _web3Provider.removeListener('chainChanged', onChainChanged);
     _web3Provider.removeListener && _web3Provider.removeListener('accountsChanged', onAccountsChanged);
     _listenning = false;
@@ -452,19 +452,19 @@ function onConnect(connection: {chainId: string}) {
   const chainId = connection && connection.chainId;
   if (chainId) {
     const chainIdAsDecimal = parseInt(chainId.slice(2), 16).toString();
-    console.debug('onConnect', {chainId, chainIdAsDecimal}); // TODO
+    logger.debug('onConnect', {chainId, chainIdAsDecimal}); // TODO
   } else {
-    console.warn('onConnect', 'no connection object passed in');
+    logger.warn('onConnect', 'no connection object passed in');
   }
 }
 
 function onDisconnect(error?: ProviderRpcError) {
-  console.debug('onDisconnect', {error}); // TODO
+  logger.debug('onDisconnect', {error}); // TODO
 }
 
 function listenForConnection() {
   if (_web3Provider) {
-    console.debug('listenning for connection...');
+    logger.debug('listenning for connection...');
     _web3Provider.on && _web3Provider.on('connect', onConnect);
     _web3Provider.on && _web3Provider.on('disconnect', onDisconnect);
   }
@@ -472,7 +472,7 @@ function listenForConnection() {
 
 function stopListeningForConnection() {
   if (_web3Provider) {
-    console.debug('stop listenning for connection...');
+    logger.debug('stop listenning for connection...');
     _web3Provider.removeListener && _web3Provider.removeListener('connect', onConnect);
     _web3Provider.removeListener && _web3Provider.removeListener('disconnect', onDisconnect);
   }
@@ -519,27 +519,27 @@ function cancelUserAttention(type: string) {
 
 const _observers = {
   onTxRequested: (transaction: TransactionRequest) => {
-    console.debug('onTxRequested', {transaction});
+    logger.debug('onTxRequested', {transaction});
     requestUserAttention('transaction');
   },
   onTxCancelled: (transaction: TransactionRequest) => {
-    console.debug('onTxCancelled', {transaction});
+    logger.debug('onTxCancelled', {transaction});
     cancelUserAttention('transaction');
   },
   onTxSent: (transaction: TransactionResponse) => {
-    console.debug('onTxSent', {transaction});
+    logger.debug('onTxSent', {transaction});
     cancelUserAttention('transaction');
   },
   onSignatureRequested: (message: unknown) => {
-    console.debug('onSignatureRequested', {message});
+    logger.debug('onSignatureRequested', {message});
     requestUserAttention('signature');
   },
   onSignatureCancelled: (message: unknown) => {
-    console.debug('onSignatureCancelled', {message});
+    logger.debug('onSignatureCancelled', {message});
     cancelUserAttention('signature');
   },
   onSignatureReceived: (signature: string) => {
-    console.debug('onSignatureReceived', {signature});
+    logger.debug('onSignatureReceived', {signature});
     cancelUserAttention('signature');
   },
   onContractTxRequested: ({
@@ -553,7 +553,7 @@ const _observers = {
     overrides: Overrides;
     outcome: unknown;
   }) => {
-    console.debug('onContractTxRequest', {name, method, overrides, outcome});
+    logger.debug('onContractTxRequest', {name, method, overrides, outcome});
   },
   onContractTxCancelled: ({
     name,
@@ -566,7 +566,7 @@ const _observers = {
     overrides: Overrides;
     outcome: unknown;
   }) => {
-    console.debug('onContractTxCancelled', {name, method, overrides, outcome});
+    logger.debug('onContractTxCancelled', {name, method, overrides, outcome});
   },
   onContractTxSent: ({
     hash,
@@ -581,7 +581,7 @@ const _observers = {
     overrides: Overrides;
     outcome: unknown;
   }) => {
-    console.debug('onContractTxSent', {hash, name, method, overrides, outcome});
+    logger.debug('onContractTxSent', {hash, name, method, overrides, outcome});
     if (hash) {
       addTransaction({hash, name, method, overrides, outcome});
     }
@@ -649,7 +649,7 @@ async function setupChain(address: string, newProviderRequired: boolean) {
     throw new Error(error.message);
   }
 
-  console.log('LOAD_CHAIN from setupChain');
+  logger.log('LOAD_CHAIN from setupChain');
   await loadChain(chainId, address, newProviderRequired);
 }
 
@@ -723,15 +723,15 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
   }); // TODO None ?
 
   if ($wallet.state === 'Ready') {
-    console.log('READY');
+    logger.log('READY');
     // Do not retry automatically if executionError or if already executing
     if (_flowResolve && $flow.executionError === undefined && !$flow.executing) {
-      console.log(' => executing...');
+      logger.log(' => executing...');
       const oldFlowResolve = _flowResolve;
       if (_call) {
         let result;
         try {
-          console.log('executing after chain Setup');
+          logger.log('executing after chain Setup');
           result = _call(contractsToAdd); // TODO try catch ?
         } catch (e) {
           set(flowStore, {executionError: e, executing: false});
@@ -878,9 +878,9 @@ async function select(type: string, moduleConfig?: any) {
         set(walletStore, {loadingModule: false});
         // }
       }
-      console.log(`setting up module`);
+      logger.log(`setting up module`);
       const {web3Provider} = await module.setup(moduleConfig); // TODO pass config in select to choose network
-      console.log(`module setup`);
+      logger.log(`module setup`);
       _web3Provider = web3Provider;
       _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
       _currentModule = module;
@@ -919,15 +919,15 @@ async function select(type: string, moduleConfig?: any) {
       }); // TODO timeout checks (metamask, portis)
     } else {
       // TODO timeout warning
-      console.log(`fetching accounts...`);
+      logger.log(`fetching accounts...`);
       accounts = await _ethersProvider.listAccounts();
-      console.log(`accounts: ${accounts}`);
+      logger.log(`accounts: ${accounts}`);
     }
   } catch (e) {
     set(walletStore, {error: e, selected: undefined, connecting: false});
     throw e;
   }
-  // console.debug({accounts});
+  // logger.debug({accounts});
   recordSelection(type);
   const address = accounts && accounts[0];
   if (address) {
@@ -937,7 +937,7 @@ async function select(type: string, moduleConfig?: any) {
       connecting: undefined,
     });
     listenForChanges();
-    console.log('SETUP_CHAIN from select');
+    logger.log('SETUP_CHAIN from select');
     await setupChain(address, false);
   } else {
     listenForChanges();
@@ -1129,7 +1129,7 @@ function unlock() {
           state: 'Ready',
           unlocking: undefined,
         });
-        console.log('SETUP_CHAIN from unlock');
+        logger.log('SETUP_CHAIN from unlock');
         await setupChain(address, true); // TODO try catch ?
       } else {
         set(walletStore, {unlocking: false});
@@ -1152,7 +1152,7 @@ function unlock() {
 }
 
 function flow_retry(): Promise<void> {
-  console.log('RETRYING...');
+  logger.log('RETRYING...');
   if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
     if (!$chain.contracts) {
       return Promise.reject('contracts not set');
@@ -1161,7 +1161,7 @@ function flow_retry(): Promise<void> {
       if (_call) {
         let result;
         try {
-          console.log('EXECUTING RETRY');
+          logger.log('EXECUTING RETRY');
           result = _call(contracts); // TODO try catch ?
         } catch (e) {
           set(flowStore, {executionError: e, executing: false});
@@ -1242,7 +1242,7 @@ function flow(
       if (func) {
         let result;
         try {
-          console.log('EXECUTING DIRECT');
+          logger.log('EXECUTING DIRECT');
           result = func(contracts); // TODO try catch ?
         } catch (e) {
           set(flowStore, {executionError: e, executing: false});
