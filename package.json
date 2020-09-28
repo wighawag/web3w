@@ -1,6 +1,6 @@
 {
   "name": "web3w",
-  "version": "0.2.31",
+  "version": "0.2.32",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/amd/index.js",
   "module": "dist/esm/index.js",

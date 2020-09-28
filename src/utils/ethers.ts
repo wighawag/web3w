@@ -1,41 +1,96 @@
-import type {Contract, Overrides} from '@ethersproject/contracts';
-import type {JsonRpcSigner, TransactionRequest, TransactionResponse, Web3Provider} from '@ethersproject/providers';
+import type {Contract, PayableOverrides} from '@ethersproject/contracts';
+import type {BigNumber, BigNumberish} from '@ethersproject/bignumber';
+import type {JsonRpcSigner, TransactionResponse, Web3Provider} from '@ethersproject/providers';
 import {noop} from './internals';
+import {logs} from 'named-logs';
+const logger = logs('web3w:ethers');
+
+export type EventsABI = {
+  anonymous: boolean;
+  inputs: {indexed: boolean; internalType: string; name: string; type: string}[];
+  name: string;
+  type: 'event';
+}[];
+
+export type ContractTransaction = {
+  from: string;
+  chainId: string;
+  to: string;
+  contractName: string;
+  method: string;
+  args: unknown[];
+  eventsABI: EventsABI;
+  overrides?: PayableOverrides;
+  metadata: unknown;
+};
+
+export type ContractTransactionSent = {hash: string} & ContractTransaction;
+
+export type Transaction = {
+  from: string;
+  chainId: string;
+  to?: string;
+  nonce?: BigNumberish;
+  gasLimit?: BigNumberish;
+  gasPrice?: BigNumberish;
+  data?: string;
+  value?: BigNumberish;
+};
+export type TransactionSent = {
+  hash: string;
+  from: string;
+  chainId: string;
+  to?: string;
+  nonce: number;
+  gasLimit: BigNumber;
+  gasPrice: BigNumber;
+  data: string;
+  value: BigNumber;
+};
+
+export type SignatureRequest = {from: string; message: unknown};
+export type SignatureResponse = {from: string; signature: string};
 
 type ContractObservers = {
-  onContractTxRequested?: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
-  onContractTxCancelled?: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
-  onContractTxSent?: (tx: {hash: string; name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
+  onContractTxRequested?: (tx: ContractTransaction) => void;
+  onContractTxCancelled?: (tx: ContractTransaction) => void;
+  onContractTxSent?: (tx: ContractTransactionSent) => void;
 };
 
 type StrictContractObservers = ContractObservers & {
-  onContractTxRequested: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
-  onContractTxCancelled: (tx: {name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
-  onContractTxSent: (tx: {hash: string; name: string; method: string; overrides: Overrides; outcome: unknown}) => void;
+  onContractTxRequested: (tx: ContractTransaction) => void;
+  onContractTxCancelled: (tx: ContractTransaction) => void;
+  onContractTxSent: (tx: ContractTransactionSent) => void;
 };
 
 type TxObservers = {
-  onTxRequested?: (tx: TransactionRequest) => void;
-  onTxCancelled?: (tx: TransactionRequest) => void;
-  onTxSent?: (tx: TransactionResponse) => void;
-  onSignatureRequested?: (msg: unknown) => void;
-  onSignatureCancelled?: (msg: unknown) => void;
-  onSignatureReceived?: (signature: string) => void;
+  onTxRequested?: (txRequest: Transaction) => void;
+  onTxCancelled?: (txRequest: Transaction) => void;
+  onTxSent?: (tx: TransactionSent) => void;
+  onSignatureRequested?: (sigRequest: SignatureRequest) => void;
+  onSignatureCancelled?: (sigRequest: SignatureRequest) => void;
+  onSignatureReceived?: (sigResponse: SignatureResponse) => void;
 };
 
 type StrictTxObservers = TxObservers & {
-  onTxRequested: (tx: TransactionRequest) => void;
-  onTxCancelled: (tx: TransactionRequest) => void;
-  onTxSent: (tx: TransactionResponse) => void;
-  onSignatureRequested: (msg: unknown) => void;
-  onSignatureCancelled: (msg: unknown) => void;
-  onSignatureReceived: (signature: string) => void;
+  onTxRequested: (txRequest: Transaction) => void;
+  onTxCancelled: (txRequest: Transaction) => void;
+  onTxSent: (tx: TransactionSent) => void;
+  onSignatureRequested: (sigRequest: SignatureRequest) => void;
+  onSignatureCancelled: (sigRequest: SignatureRequest) => void;
+  onSignatureReceived: (sigResponse: SignatureResponse) => void;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFunction = (...args: any[]) => any;
 
-export function proxyContract(contractToProxy: Contract, name: string, observers?: ContractObservers): Contract {
+export function proxyContract(
+  contractToProxy: Contract,
+  name: string,
+  chainId: string,
+  observers?: ContractObservers
+): Contract {
+  logger.log('PROXY', {name});
   const actualObservers: StrictContractObservers = observers
     ? {
         onContractTxRequested: noop,
@@ -50,6 +105,10 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
       };
   const {onContractTxRequested, onContractTxCancelled, onContractTxSent} = actualObservers;
   const proxies: {[methodName: string]: AnyFunction} = {};
+
+  const eventsABI: EventsABI = contractToProxy.interface.fragments
+    .filter((fragment) => fragment.type === 'event')
+    .map((fragment) => JSON.parse(fragment.format('json')));
 
   const functionsInterface = contractToProxy.interface.functions;
   const nameToSig: {[name: string]: string} = {};
@@ -81,41 +140,65 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
 
       callProxy = new Proxy(functions[methodName], {
         // TODO empty object (to populate later when contract is available ?)
-        apply: async (method, thisArg, argumentsList) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        apply: async (method, thisArg, argumentsList: any[]) => {
+          const from = await contractToProxy.signer.getAddress();
           const numArguments = argumentsList.length;
+          let args = argumentsList;
           let overrides;
           if (
             numArguments === methodInterface.inputs.length + 1 &&
             typeof argumentsList[numArguments - 1] === 'object'
           ) {
+            args = args.slice(0, numArguments - 1);
             overrides = argumentsList[numArguments];
           }
-          let outcome;
+          let metadata;
           if (overrides) {
-            outcome = overrides.outcome;
+            metadata = overrides.metadata;
             overrides = {...overrides}; // copy to preserve original object
-            delete overrides.outcome;
+            delete overrides.metadata;
           }
-          onContractTxRequested({name, method: methodName, overrides, outcome});
+          onContractTxRequested({
+            to: contractToProxy.address,
+            from,
+            chainId,
+            eventsABI,
+            contractName: name,
+            args,
+            method: methodName,
+            overrides,
+            metadata,
+          });
           let tx;
           try {
             tx = await method.bind(functions)(...argumentsList);
           } catch (e) {
             onContractTxCancelled({
-              name,
+              to: contractToProxy.address,
+              from,
+              chainId,
+              eventsABI,
+              contractName: name,
+              args,
               method: methodName,
               overrides,
-              outcome,
+              metadata,
             }); // TODO id to identify?
             throw e;
           }
           onContractTxSent({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             hash: (tx as any).hash,
-            name,
+            to: contractToProxy.address,
+            from,
+            chainId,
+            eventsABI,
+            contractName: name,
+            args,
             method: methodName,
             overrides,
-            outcome,
+            metadata,
           });
           return tx;
         },
@@ -142,7 +225,7 @@ export function proxyContract(contractToProxy: Contract, name: string, observers
       } else if (prop === 'connect') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (signer: any) => {
-          return proxyContract(contractToProxy.connect(signer), name, observers);
+          return proxyContract(contractToProxy.connect(signer), name, chainId, observers);
         };
       } else if (prop === 'toJSON') {
         return () => ({
@@ -175,28 +258,33 @@ function proxySigner(
     {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       sendTransaction: async (method: AnyFunction, thisArg: any, argumentsList: any[]) => {
-        onTxRequested(argumentsList[0]);
+        const from = await signer.getAddress();
+        const chainId = await (await signer.getChainId()).toString();
+        const txRequest = {...argumentsList[0], from, chainId};
+        onTxRequested(txRequest);
         let tx: TransactionResponse;
         try {
           tx = (await method.bind(thisArg)(...argumentsList)) as TransactionResponse;
         } catch (e) {
-          onTxCancelled(argumentsList[0]);
+          onTxCancelled(txRequest);
           throw e;
         }
-        onTxSent(tx);
+        onTxSent({...tx, chainId});
         return tx;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signMessage: async (method: AnyFunction, thisArg: any, argumentsList: any[]) => {
-        onSignatureRequested(argumentsList[0]);
+        const from = await signer.getAddress();
+        const sigRequest = {from, message: argumentsList[0]};
+        onSignatureRequested(sigRequest);
         let signature: string;
         try {
           signature = (await method.bind(thisArg)(...argumentsList)) as string;
         } catch (e) {
-          onSignatureCancelled(argumentsList[0]);
+          onSignatureCancelled(sigRequest);
           throw e;
         }
-        onSignatureReceived(signature);
+        onSignatureReceived({from, signature});
         return signature;
       },
     },

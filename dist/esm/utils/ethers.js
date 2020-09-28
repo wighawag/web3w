@@ -8,7 +8,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { noop } from './internals';
-export function proxyContract(contractToProxy, name, observers) {
+import { logs } from 'named-logs';
+const logger = logs('web3w:ethers');
+export function proxyContract(contractToProxy, name, chainId, observers) {
+    logger.log('PROXY', { name });
     const actualObservers = observers
         ? Object.assign({ onContractTxRequested: noop, onContractTxCancelled: noop, onContractTxSent: noop }, observers) : {
         onContractTxRequested: noop,
@@ -17,6 +20,9 @@ export function proxyContract(contractToProxy, name, observers) {
     };
     const { onContractTxRequested, onContractTxCancelled, onContractTxSent } = actualObservers;
     const proxies = {};
+    const eventsABI = contractToProxy.interface.fragments
+        .filter((fragment) => fragment.type === 'event')
+        .map((fragment) => JSON.parse(fragment.format('json')));
     const functionsInterface = contractToProxy.interface.functions;
     const nameToSig = {};
     for (const sig of Object.keys(functionsInterface)) {
@@ -43,40 +49,64 @@ export function proxyContract(contractToProxy, name, observers) {
             }
             callProxy = new Proxy(functions[methodName], {
                 // TODO empty object (to populate later when contract is available ?)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 apply: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
+                    const from = yield contractToProxy.signer.getAddress();
                     const numArguments = argumentsList.length;
+                    let args = argumentsList;
                     let overrides;
                     if (numArguments === methodInterface.inputs.length + 1 &&
                         typeof argumentsList[numArguments - 1] === 'object') {
+                        args = args.slice(0, numArguments - 1);
                         overrides = argumentsList[numArguments];
                     }
-                    let outcome;
+                    let metadata;
                     if (overrides) {
-                        outcome = overrides.outcome;
+                        metadata = overrides.metadata;
                         overrides = Object.assign({}, overrides); // copy to preserve original object
-                        delete overrides.outcome;
+                        delete overrides.metadata;
                     }
-                    onContractTxRequested({ name, method: methodName, overrides, outcome });
+                    onContractTxRequested({
+                        to: contractToProxy.address,
+                        from,
+                        chainId,
+                        eventsABI,
+                        contractName: name,
+                        args,
+                        method: methodName,
+                        overrides,
+                        metadata,
+                    });
                     let tx;
                     try {
                         tx = yield method.bind(functions)(...argumentsList);
                     }
                     catch (e) {
                         onContractTxCancelled({
-                            name,
+                            to: contractToProxy.address,
+                            from,
+                            chainId,
+                            eventsABI,
+                            contractName: name,
+                            args,
                             method: methodName,
                             overrides,
-                            outcome,
+                            metadata,
                         }); // TODO id to identify?
                         throw e;
                     }
                     onContractTxSent({
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         hash: tx.hash,
-                        name,
+                        to: contractToProxy.address,
+                        from,
+                        chainId,
+                        eventsABI,
+                        contractName: name,
+                        args,
                         method: methodName,
                         overrides,
-                        outcome,
+                        metadata,
                     });
                     return tx;
                 }),
@@ -105,7 +135,7 @@ export function proxyContract(contractToProxy, name, observers) {
             else if (prop === 'connect') {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 return (signer) => {
-                    return proxyContract(contractToProxy.connect(signer), name, observers);
+                    return proxyContract(contractToProxy.connect(signer), name, chainId, observers);
                 };
             }
             else if (prop === 'toJSON') {
@@ -127,30 +157,35 @@ function proxySigner(signer, applyMap, { onTxRequested, onTxCancelled, onTxSent,
     applyMap = Object.assign({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         sendTransaction: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
-            onTxRequested(argumentsList[0]);
+            const from = yield signer.getAddress();
+            const chainId = yield (yield signer.getChainId()).toString();
+            const txRequest = Object.assign(Object.assign({}, argumentsList[0]), { from, chainId });
+            onTxRequested(txRequest);
             let tx;
             try {
                 tx = (yield method.bind(thisArg)(...argumentsList));
             }
             catch (e) {
-                onTxCancelled(argumentsList[0]);
+                onTxCancelled(txRequest);
                 throw e;
             }
-            onTxSent(tx);
+            onTxSent(Object.assign(Object.assign({}, tx), { chainId }));
             return tx;
         }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         signMessage: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
-            onSignatureRequested(argumentsList[0]);
+            const from = yield signer.getAddress();
+            const sigRequest = { from, message: argumentsList[0] };
+            onSignatureRequested(sigRequest);
             let signature;
             try {
                 signature = (yield method.bind(thisArg)(...argumentsList));
             }
             catch (e) {
-                onSignatureCancelled(argumentsList[0]);
+                onSignatureCancelled(sigRequest);
                 throw e;
             }
-            onSignatureReceived(signature);
+            onSignatureReceived({ from, signature });
             return signature;
         }),
     }, applyMap);

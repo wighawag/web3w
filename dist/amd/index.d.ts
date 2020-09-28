@@ -88,44 +88,84 @@ declare module "utils/index" {
     export function timeout<T>(time: number, p: Promise<T>, config?: Config | Func<T>): Promise<T>;
 }
 declare module "utils/ethers" {
-    import type { Contract, Overrides } from '@ethersproject/contracts';
-    import type { TransactionRequest, TransactionResponse, Web3Provider } from '@ethersproject/providers';
+    import type { Contract, PayableOverrides } from '@ethersproject/contracts';
+    import type { BigNumber, BigNumberish } from '@ethersproject/bignumber';
+    import type { Web3Provider } from '@ethersproject/providers';
+    export type EventsABI = {
+        anonymous: boolean;
+        inputs: {
+            indexed: boolean;
+            internalType: string;
+            name: string;
+            type: string;
+        }[];
+        name: string;
+        type: 'event';
+    }[];
+    export type ContractTransaction = {
+        from: string;
+        chainId: string;
+        to: string;
+        contractName: string;
+        method: string;
+        args: unknown[];
+        eventsABI: EventsABI;
+        overrides?: PayableOverrides;
+        metadata: unknown;
+    };
+    export type ContractTransactionSent = {
+        hash: string;
+    } & ContractTransaction;
+    export type Transaction = {
+        from: string;
+        chainId: string;
+        to?: string;
+        nonce?: BigNumberish;
+        gasLimit?: BigNumberish;
+        gasPrice?: BigNumberish;
+        data?: string;
+        value?: BigNumberish;
+    };
+    export type TransactionSent = {
+        hash: string;
+        from: string;
+        chainId: string;
+        to?: string;
+        nonce: number;
+        gasLimit: BigNumber;
+        gasPrice: BigNumber;
+        data: string;
+        value: BigNumber;
+    };
+    export type SignatureRequest = {
+        from: string;
+        message: unknown;
+    };
+    export type SignatureResponse = {
+        from: string;
+        signature: string;
+    };
     type ContractObservers = {
-        onContractTxRequested?: (tx: {
-            name: string;
-            method: string;
-            overrides: Overrides;
-            outcome: unknown;
-        }) => void;
-        onContractTxCancelled?: (tx: {
-            name: string;
-            method: string;
-            overrides: Overrides;
-            outcome: unknown;
-        }) => void;
-        onContractTxSent?: (tx: {
-            hash: string;
-            name: string;
-            method: string;
-            overrides: Overrides;
-            outcome: unknown;
-        }) => void;
+        onContractTxRequested?: (tx: ContractTransaction) => void;
+        onContractTxCancelled?: (tx: ContractTransaction) => void;
+        onContractTxSent?: (tx: ContractTransactionSent) => void;
     };
     type TxObservers = {
-        onTxRequested?: (tx: TransactionRequest) => void;
-        onTxCancelled?: (tx: TransactionRequest) => void;
-        onTxSent?: (tx: TransactionResponse) => void;
-        onSignatureRequested?: (msg: unknown) => void;
-        onSignatureCancelled?: (msg: unknown) => void;
-        onSignatureReceived?: (signature: string) => void;
+        onTxRequested?: (txRequest: Transaction) => void;
+        onTxCancelled?: (txRequest: Transaction) => void;
+        onTxSent?: (tx: TransactionSent) => void;
+        onSignatureRequested?: (sigRequest: SignatureRequest) => void;
+        onSignatureCancelled?: (sigRequest: SignatureRequest) => void;
+        onSignatureReceived?: (sigResponse: SignatureResponse) => void;
     };
-    export function proxyContract(contractToProxy: Contract, name: string, observers?: ContractObservers): Contract;
+    export function proxyContract(contractToProxy: Contract, name: string, chainId: string, observers?: ContractObservers): Contract;
     export function proxyWeb3Provider(provider: Web3Provider, observers?: TxObservers): Web3Provider;
 }
 declare module "index" {
-    import { Contract, Overrides } from '@ethersproject/contracts';
+    import { Contract } from '@ethersproject/contracts';
     import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
     import { BigNumber } from '@ethersproject/bignumber';
+    import type { EventsABI } from "utils/ethers";
     import { Readable } from "utils/internals";
     type ErrorData = {
         code: number;
@@ -262,10 +302,23 @@ declare module "index" {
     };
     type TransactionRecord = {
         hash: string;
-        name: string;
-        method: string;
-        overrides: Overrides;
-        outcome: unknown;
+        acknowledged: boolean;
+        cancelled: boolean;
+        cancelationAcknowledged: boolean;
+        to?: string;
+        nonce?: number;
+        gasLimit?: string;
+        gasPrice?: string;
+        data?: string;
+        value?: string;
+        contractName?: string;
+        method?: string;
+        args?: unknown[];
+        eventsABI?: EventsABI;
+        metadata?: unknown;
+        lastCheckBlock?: number;
+        blockHash?: string;
+        success?: boolean;
     };
     export type Web3wConfig = {
         builtin?: BuiltinConfig;
@@ -277,6 +330,7 @@ declare module "index" {
         chainConfigs: ChainConfigs;
         options?: ModuleOptions;
         autoSelectPrevious?: boolean;
+        localStoragePrefix?: string;
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
     function disconnect(config?: {

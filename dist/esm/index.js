@@ -7,14 +7,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-// import { isPrivateWindow } from './utils/web';
-// import {Wallet} from "@ethersproject/wallet";
 import { Contract } from '@ethersproject/contracts';
-import { Web3Provider, } from '@ethersproject/providers';
+import { Web3Provider } from '@ethersproject/providers';
 import { writable } from './utils/store';
 import { fetchEthereum, getVendor } from './utils/builtin';
 import { timeout } from './utils/index.js';
-import { proxyContract, proxyWeb3Provider } from './utils/ethers';
+import { proxyContract, proxyWeb3Provider, } from './utils/ethers';
 import { logs } from 'named-logs';
 import { CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET } from './errors';
 const logger = logs('web3w:index');
@@ -71,10 +69,8 @@ const builtinStore = store($builtin);
 const chainStore = store($chain);
 const balanceStore = store($balance);
 const flowStore = store($flow);
-function addTransaction(tx) {
-    $transactions.push(tx);
-    transactionsStore.set($transactions);
-}
+let LOCAL_STORAGE_TRANSACTIONS_SLOT = '_web3w_transactions';
+let LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = '_web3w_previous_wallet_type';
 function set(store, obj) {
     for (const key of Object.keys(obj)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,6 +142,7 @@ function onChainChanged(chainId) {
             notSupported: undefined,
         });
         if ($wallet.address) {
+            loadTransactions($wallet.address, chainIdAsDecimal);
             logger.log('LOAD_CHAIN from chainChanged');
             yield loadChain(chainIdAsDecimal, $wallet.address, true);
         }
@@ -165,6 +162,9 @@ function onAccountsChanged(accounts) {
         const address = accounts[0];
         if (address) {
             set(walletStore, { address, state: 'Ready' });
+            if ($chain.chainId) {
+                loadTransactions(address, $chain.chainId);
+            }
             if ($chain.state === 'Connected') {
                 if ($chain.chainId) {
                     logger.log('LOAD_CHAIN from accountsChanged');
@@ -179,6 +179,7 @@ function onAccountsChanged(accounts) {
             }
         }
         else {
+            unloadTransactions(); // TODO do not do that, keep the tx ?
             set(walletStore, { address, state: 'Locked' });
             reAssignContracts(address);
         }
@@ -345,49 +346,95 @@ function cancelUserAttention(type) {
     }
 }
 const _observers = {
-    onTxRequested: (transaction) => {
-        logger.debug('onTxRequested', { transaction });
+    onTxRequested: (txRequest) => {
+        logger.debug('onTxRequested', { txRequest });
         requestUserAttention('transaction');
     },
-    onTxCancelled: (transaction) => {
-        logger.debug('onTxCancelled', { transaction });
+    onTxCancelled: (txRequest) => {
+        logger.debug('onTxCancelled', { txRequest });
         cancelUserAttention('transaction');
     },
-    onTxSent: (transaction) => {
-        logger.debug('onTxSent', { transaction });
+    onTxSent: ({ hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to }) => {
+        logger.debug('onTxSent', { hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to });
+        if (hash) {
+            const transactionRecord = {
+                hash,
+                from,
+                acknowledged: false,
+                cancelled: false,
+                cancelationAcknowledged: false,
+                to,
+                nonce,
+                gasLimit: gasLimit.toString(),
+                gasPrice: gasPrice.toString(),
+                data,
+                value: value.toString(),
+                chainId,
+            };
+            addTransaction(from, chainId, transactionRecord);
+        }
         cancelUserAttention('transaction');
     },
-    onSignatureRequested: (message) => {
-        logger.debug('onSignatureRequested', { message });
+    onSignatureRequested: (sigRequest) => {
+        logger.debug('onSignatureRequested', { sigRequest });
         requestUserAttention('signature');
     },
-    onSignatureCancelled: (message) => {
-        logger.debug('onSignatureCancelled', { message });
+    onSignatureCancelled: (sigRequest) => {
+        logger.debug('onSignatureCancelled', { sigRequest });
         cancelUserAttention('signature');
     },
-    onSignatureReceived: (signature) => {
-        logger.debug('onSignatureReceived', { signature });
+    onSignatureReceived: (sigResponse) => {
+        logger.debug('onSignatureReceived', { sigResponse });
         cancelUserAttention('signature');
     },
-    onContractTxRequested: ({ name, method, overrides, outcome, }) => {
-        logger.debug('onContractTxRequest', { name, method, overrides, outcome });
+    onContractTxRequested: ({ from, contractName, method, overrides, metadata }) => {
+        logger.debug('onContractTxRequest', { from, contractName, method, overrides, metadata });
     },
-    onContractTxCancelled: ({ name, method, overrides, outcome, }) => {
-        logger.debug('onContractTxCancelled', { name, method, overrides, outcome });
+    onContractTxCancelled: ({ from, contractName, method, overrides, metadata }) => {
+        logger.debug('onContractTxCancelled', { from, contractName, method, overrides, metadata });
     },
-    onContractTxSent: ({ hash, name, method, overrides, outcome, }) => {
-        logger.debug('onContractTxSent', { hash, name, method, overrides, outcome });
+    onContractTxSent: ({ hash, from, contractName, method, args, eventsABI, overrides, metadata, to, chainId, }) => {
+        var _a, _b, _c;
+        logger.debug('onContractTxSent', { hash, from, contractName, method, args, eventsABI, overrides, metadata, to });
         if (hash) {
-            addTransaction({ hash, name, method, overrides, outcome });
+            let nonceAsNumber;
+            if (overrides && overrides.nonce) {
+                nonceAsNumber = parseInt(overrides.nonce.toString());
+            }
+            const transactionRecord = {
+                hash,
+                from,
+                acknowledged: false,
+                cancelled: false,
+                cancelationAcknowledged: false,
+                contractName,
+                method,
+                args,
+                eventsABI,
+                metadata,
+                to,
+                nonce: nonceAsNumber,
+                gasLimit: (_a = overrides === null || overrides === void 0 ? void 0 : overrides.gasLimit) === null || _a === void 0 ? void 0 : _a.toString(),
+                gasPrice: (_b = overrides === null || overrides === void 0 ? void 0 : overrides.gasPrice) === null || _b === void 0 ? void 0 : _b.toString(),
+                value: (_c = overrides === null || overrides === void 0 ? void 0 : overrides.value) === null || _c === void 0 ? void 0 : _c.toString(),
+            };
+            addTransaction(from, chainId, transactionRecord);
         }
     },
 };
-const LOCAL_STORAGE_SLOT = '_web3w_previous_wallet_type';
 function recordSelection(type) {
-    localStorage.setItem(LOCAL_STORAGE_SLOT, type);
+    try {
+        localStorage.setItem(LOCAL_STORAGE_PREVIOUS_WALLET_SLOT, type);
+    }
+    catch (e) { }
 }
 function fetchPreviousSelection() {
-    return localStorage.getItem(LOCAL_STORAGE_SLOT);
+    try {
+        return localStorage.getItem(LOCAL_STORAGE_PREVIOUS_WALLET_SLOT);
+    }
+    catch (e) {
+        return null;
+    }
 }
 function setupChain(address, newProviderRequired) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -443,6 +490,7 @@ function setupChain(address, newProviderRequired) {
             });
             throw new Error(error.message);
         }
+        loadTransactions(address, chainId); // TODO wallet address might not be available
         logger.log('LOAD_CHAIN from setupChain');
         yield loadChain(chainId, address, newProviderRequired);
     });
@@ -502,7 +550,8 @@ function loadChain(chainId, address, newProviderRequired) {
             for (const contractName of Object.keys(contractsInfos)) {
                 const contractInfo = contractsInfos[contractName];
                 if (contractInfo.abi) {
-                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)), contractName, _observers);
+                    logger.log({ contractName });
+                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)), contractName, chainId, _observers);
                 }
                 addresses[contractName] = contractInfo.address;
             }
@@ -824,6 +873,7 @@ function _disconnect(keepFlow) {
         selected: undefined,
         error: undefined,
     });
+    unloadTransactions();
     set(balanceStore, {
         state: 'Idle',
         amount: undefined,
@@ -1140,8 +1190,80 @@ function flow_cancel() {
     _call = undefined;
     set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
 }
+function addTransaction(from, chainId, tx) {
+    addOrChangeTransaction(from, chainId, tx, false);
+}
+// function updateTransaction(from: string, chainId: string, tx: TransactionRecord) {
+//   addOrChangeTransaction(from, chainId, tx, true);
+// }
+function addOrChangeTransaction(from, chainId, tx, override) {
+    if ($wallet.address &&
+        $wallet.address.toLowerCase() === from.toLowerCase() &&
+        $chain.chainId &&
+        chainId === $chain.chainId) {
+        logger.log('TransactionRecord', tx);
+        const found = $transactions.find((v) => v.hash === tx.hash);
+        if (found) {
+            const foundAsRecord = found;
+            const txAsRecord = tx;
+            for (const key of Object.keys(txAsRecord)) {
+                if ((!override && foundAsRecord[key] === undefined) || (override && txAsRecord[key] !== undefined)) {
+                    foundAsRecord[key] = txAsRecord[key];
+                }
+            }
+        }
+        else {
+            $transactions.push(tx);
+        }
+        try {
+            localStorage.setItem(LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${from.toLowerCase()}_${chainId}`, JSON.stringify($transactions));
+        }
+        catch (e) { }
+        transactionsStore.set($transactions);
+    }
+    else {
+        try {
+            const localStorageSlot = LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${from.toLowerCase()}_${chainId}`;
+            const lastTransactionsString = localStorage.getItem(localStorageSlot) || '[]';
+            const transactions = JSON.parse(lastTransactionsString);
+            const found = transactions.find((v) => v.hash === tx.hash);
+            if (found) {
+                const foundAsRecord = found;
+                const txAsRecord = tx;
+                for (const key of Object.keys(tx)) {
+                    if ((!override && foundAsRecord[key] === undefined) || (override && txAsRecord[key] !== undefined)) {
+                        foundAsRecord[key] = txAsRecord[key];
+                    }
+                }
+            }
+            else {
+                transactions.push(tx);
+            }
+            localStorage.setItem(localStorageSlot, JSON.stringify(transactions));
+        }
+        catch (e) { }
+    }
+}
+function unloadTransactions() {
+    $transactions.splice(0, $transactions.length);
+    transactionsStore.set($transactions);
+}
+function loadTransactions(address, chainId) {
+    try {
+        const txString = localStorage.getItem(LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${address.toLowerCase()}_${chainId}`);
+        let transactions = [];
+        if (txString) {
+            transactions = JSON.parse(txString);
+        }
+        $transactions.splice(0, $transactions.length, ...transactions);
+        transactionsStore.set($transactions);
+    }
+    catch (e) { }
+}
 // /////////////////////////////////////////////////////////////////////////////////
 export default (config) => {
+    LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_PREVIOUS_WALLET_SLOT;
+    LOCAL_STORAGE_TRANSACTIONS_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_TRANSACTIONS_SLOT;
     config = Object.assign({}, (config || {}));
     if (!config.options || config.options.length === 0) {
         config.options = ['builtin'];

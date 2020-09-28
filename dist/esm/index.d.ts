@@ -1,6 +1,7 @@
-import { Contract, Overrides } from '@ethersproject/contracts';
+import { Contract } from '@ethersproject/contracts';
 import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
 import { BigNumber } from '@ethersproject/bignumber';
+import type { EventsABI } from './utils/ethers';
 import { Readable } from './utils/internals';
 declare type ErrorData = {
     code: number;
@@ -137,10 +138,23 @@ declare type BuiltinConfig = {
 };
 declare type TransactionRecord = {
     hash: string;
-    name: string;
-    method: string;
-    overrides: Overrides;
-    outcome: unknown;
+    acknowledged: boolean;
+    cancelled: boolean;
+    cancelationAcknowledged: boolean;
+    to?: string;
+    nonce?: number;
+    gasLimit?: string;
+    gasPrice?: string;
+    data?: string;
+    value?: string;
+    contractName?: string;
+    method?: string;
+    args?: unknown[];
+    eventsABI?: EventsABI;
+    metadata?: unknown;
+    lastCheckBlock?: number;
+    blockHash?: string;
+    success?: boolean;
 };
 export declare type Web3wConfig = {
     builtin?: BuiltinConfig;
@@ -152,6 +166,7 @@ export declare type Web3wConfig = {
     chainConfigs: ChainConfigs;
     options?: ModuleOptions;
     autoSelectPrevious?: boolean;
+    localStoragePrefix?: string;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
 declare function disconnect(config?: {

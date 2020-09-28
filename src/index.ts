@@ -1,18 +1,20 @@
-// import { isPrivateWindow } from './utils/web';
-// import {Wallet} from "@ethersproject/wallet";
-import {Contract, Overrides} from '@ethersproject/contracts';
-import {
-  Web3Provider,
-  TransactionRequest,
-  TransactionResponse,
-  JsonRpcProvider,
-  ExternalProvider,
-} from '@ethersproject/providers';
+import {Contract} from '@ethersproject/contracts';
+import {Web3Provider, JsonRpcProvider, ExternalProvider} from '@ethersproject/providers';
 import {BigNumber} from '@ethersproject/bignumber';
 import {writable} from './utils/store';
 import {fetchEthereum, getVendor} from './utils/builtin';
 import {timeout} from './utils/index.js';
-import {proxyContract, proxyWeb3Provider} from './utils/ethers';
+import {
+  ContractTransaction,
+  ContractTransactionSent,
+  proxyContract,
+  proxyWeb3Provider,
+  SignatureRequest,
+  SignatureResponse,
+  Transaction,
+  TransactionSent,
+} from './utils/ethers';
+import type {EventsABI} from './utils/ethers';
 import {Writable, Readable} from './utils/internals';
 import {logs} from 'named-logs';
 import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET} from './errors';
@@ -161,10 +163,23 @@ type BuiltinConfig = {
 
 type TransactionRecord = {
   hash: string;
-  name: string;
-  method: string;
-  overrides: Overrides;
-  outcome: unknown;
+  acknowledged: boolean;
+  cancelled: boolean;
+  cancelationAcknowledged: boolean;
+  to?: string;
+  nonce?: number;
+  gasLimit?: string;
+  gasPrice?: string;
+  data?: string;
+  value?: string;
+  contractName?: string;
+  method?: string;
+  args?: unknown[];
+  eventsABI?: EventsABI;
+  metadata?: unknown;
+  lastCheckBlock?: number;
+  blockHash?: string;
+  success?: boolean;
 }; // TODO
 
 export type Web3wConfig = {
@@ -174,6 +189,7 @@ export type Web3wConfig = {
   chainConfigs: ChainConfigs;
   options?: ModuleOptions;
   autoSelectPrevious?: boolean;
+  localStoragePrefix?: string;
 };
 
 const isBrowser = typeof window != 'undefined';
@@ -243,10 +259,8 @@ const chainStore = store($chain);
 const balanceStore = store($balance);
 const flowStore = store($flow);
 
-function addTransaction(tx: TransactionRecord) {
-  $transactions.push(tx);
-  transactionsStore.set($transactions);
-}
+let LOCAL_STORAGE_TRANSACTIONS_SLOT = '_web3w_transactions';
+let LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = '_web3w_previous_wallet_type';
 
 function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
   for (const key of Object.keys(obj)) {
@@ -320,6 +334,7 @@ async function onChainChanged(chainId: string) {
     notSupported: undefined,
   });
   if ($wallet.address) {
+    loadTransactions($wallet.address, chainIdAsDecimal);
     logger.log('LOAD_CHAIN from chainChanged');
     await loadChain(chainIdAsDecimal, $wallet.address, true);
   }
@@ -339,6 +354,9 @@ async function onAccountsChanged(accounts: string[]) {
   const address = accounts[0];
   if (address) {
     set(walletStore, {address, state: 'Ready'});
+    if ($chain.chainId) {
+      loadTransactions(address, $chain.chainId);
+    }
     if ($chain.state === 'Connected') {
       if ($chain.chainId) {
         logger.log('LOAD_CHAIN from accountsChanged');
@@ -350,6 +368,7 @@ async function onAccountsChanged(accounts: string[]) {
       reAssignContracts(address);
     }
   } else {
+    unloadTransactions(); // TODO do not do that, keep the tx ?
     set(walletStore, {address, state: 'Locked'});
     reAssignContracts(address);
   }
@@ -518,83 +537,105 @@ function cancelUserAttention(type: string) {
 }
 
 const _observers = {
-  onTxRequested: (transaction: TransactionRequest) => {
-    logger.debug('onTxRequested', {transaction});
+  onTxRequested: (txRequest: Transaction) => {
+    logger.debug('onTxRequested', {txRequest});
     requestUserAttention('transaction');
   },
-  onTxCancelled: (transaction: TransactionRequest) => {
-    logger.debug('onTxCancelled', {transaction});
+  onTxCancelled: (txRequest: Transaction) => {
+    logger.debug('onTxCancelled', {txRequest});
     cancelUserAttention('transaction');
   },
-  onTxSent: (transaction: TransactionResponse) => {
-    logger.debug('onTxSent', {transaction});
+  onTxSent: ({hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to}: TransactionSent) => {
+    logger.debug('onTxSent', {hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to});
+    if (hash) {
+      const transactionRecord = {
+        hash,
+        from,
+        acknowledged: false,
+        cancelled: false,
+        cancelationAcknowledged: false,
+        to,
+        nonce,
+        gasLimit: gasLimit.toString(),
+        gasPrice: gasPrice.toString(),
+        data,
+        value: value.toString(),
+        chainId,
+      };
+      addTransaction(from, chainId, transactionRecord);
+    }
     cancelUserAttention('transaction');
   },
-  onSignatureRequested: (message: unknown) => {
-    logger.debug('onSignatureRequested', {message});
+  onSignatureRequested: (sigRequest: SignatureRequest) => {
+    logger.debug('onSignatureRequested', {sigRequest});
     requestUserAttention('signature');
   },
-  onSignatureCancelled: (message: unknown) => {
-    logger.debug('onSignatureCancelled', {message});
+  onSignatureCancelled: (sigRequest: SignatureRequest) => {
+    logger.debug('onSignatureCancelled', {sigRequest});
     cancelUserAttention('signature');
   },
-  onSignatureReceived: (signature: string) => {
-    logger.debug('onSignatureReceived', {signature});
+  onSignatureReceived: (sigResponse: SignatureResponse) => {
+    logger.debug('onSignatureReceived', {sigResponse});
     cancelUserAttention('signature');
   },
-  onContractTxRequested: ({
-    name,
-    method,
-    overrides,
-    outcome,
-  }: {
-    name: string;
-    method: string;
-    overrides: Overrides;
-    outcome: unknown;
-  }) => {
-    logger.debug('onContractTxRequest', {name, method, overrides, outcome});
+  onContractTxRequested: ({from, contractName, method, overrides, metadata}: ContractTransaction) => {
+    logger.debug('onContractTxRequest', {from, contractName, method, overrides, metadata});
   },
-  onContractTxCancelled: ({
-    name,
-    method,
-    overrides,
-    outcome,
-  }: {
-    name: string;
-    method: string;
-    overrides: Overrides;
-    outcome: unknown;
-  }) => {
-    logger.debug('onContractTxCancelled', {name, method, overrides, outcome});
+  onContractTxCancelled: ({from, contractName, method, overrides, metadata}: ContractTransaction) => {
+    logger.debug('onContractTxCancelled', {from, contractName, method, overrides, metadata});
   },
   onContractTxSent: ({
     hash,
-    name,
+    from,
+    contractName,
     method,
+    args,
+    eventsABI,
     overrides,
-    outcome,
-  }: {
-    hash: string;
-    name: string;
-    method: string;
-    overrides: Overrides;
-    outcome: unknown;
-  }) => {
-    logger.debug('onContractTxSent', {hash, name, method, overrides, outcome});
+    metadata,
+    to,
+    chainId,
+  }: ContractTransactionSent) => {
+    logger.debug('onContractTxSent', {hash, from, contractName, method, args, eventsABI, overrides, metadata, to});
     if (hash) {
-      addTransaction({hash, name, method, overrides, outcome});
+      let nonceAsNumber;
+      if (overrides && overrides.nonce) {
+        nonceAsNumber = parseInt(overrides.nonce.toString());
+      }
+      const transactionRecord = {
+        hash,
+        from,
+        acknowledged: false,
+        cancelled: false,
+        cancelationAcknowledged: false,
+        contractName,
+        method,
+        args, // TODO Transform to string ?
+        eventsABI,
+        metadata,
+        to,
+        nonce: nonceAsNumber,
+        gasLimit: overrides?.gasLimit?.toString(),
+        gasPrice: overrides?.gasPrice?.toString(),
+        value: overrides?.value?.toString(),
+      };
+      addTransaction(from, chainId, transactionRecord);
     }
   },
 };
 
-const LOCAL_STORAGE_SLOT = '_web3w_previous_wallet_type';
 function recordSelection(type: string) {
-  localStorage.setItem(LOCAL_STORAGE_SLOT, type);
+  try {
+    localStorage.setItem(LOCAL_STORAGE_PREVIOUS_WALLET_SLOT, type);
+  } catch (e) {}
 }
 
 function fetchPreviousSelection() {
-  return localStorage.getItem(LOCAL_STORAGE_SLOT);
+  try {
+    return localStorage.getItem(LOCAL_STORAGE_PREVIOUS_WALLET_SLOT);
+  } catch (e) {
+    return null;
+  }
 }
 
 async function setupChain(address: string, newProviderRequired: boolean) {
@@ -648,7 +689,7 @@ async function setupChain(address: string, newProviderRequired: boolean) {
     });
     throw new Error(error.message);
   }
-
+  loadTransactions(address, chainId); // TODO wallet address might not be available
   logger.log('LOAD_CHAIN from setupChain');
   await loadChain(chainId, address, newProviderRequired);
 }
@@ -704,9 +745,11 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
     for (const contractName of Object.keys(contractsInfos)) {
       const contractInfo = contractsInfos[contractName];
       if (contractInfo.abi) {
+        logger.log({contractName});
         contractsToAdd[contractName] = proxyContract(
           new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)),
           contractName,
+          chainId,
           _observers
         );
       }
@@ -1029,6 +1072,7 @@ function _disconnect(keepFlow?: boolean) {
     selected: undefined,
     error: undefined,
   });
+  unloadTransactions();
   set(balanceStore, {
     state: 'Idle',
     amount: undefined,
@@ -1345,6 +1389,78 @@ function flow_cancel() {
   set(flowStore, {inProgress: false, error: undefined, executionError: undefined, executing: false});
 }
 
+function addTransaction(from: string, chainId: string, tx: TransactionRecord) {
+  addOrChangeTransaction(from, chainId, tx, false);
+}
+// function updateTransaction(from: string, chainId: string, tx: TransactionRecord) {
+//   addOrChangeTransaction(from, chainId, tx, true);
+// }
+function addOrChangeTransaction(from: string, chainId: string, tx: TransactionRecord, override: boolean) {
+  if (
+    $wallet.address &&
+    $wallet.address.toLowerCase() === from.toLowerCase() &&
+    $chain.chainId &&
+    chainId === $chain.chainId
+  ) {
+    logger.log('TransactionRecord', tx);
+    const found = $transactions.find((v: TransactionRecord) => v.hash === tx.hash);
+    if (found) {
+      const foundAsRecord = found as Record<string, unknown>;
+      const txAsRecord = tx as Record<string, unknown>;
+      for (const key of Object.keys(txAsRecord)) {
+        if ((!override && foundAsRecord[key] === undefined) || (override && txAsRecord[key] !== undefined)) {
+          foundAsRecord[key] = txAsRecord[key];
+        }
+      }
+    } else {
+      $transactions.push(tx);
+    }
+    try {
+      localStorage.setItem(
+        LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${from.toLowerCase()}_${chainId}`,
+        JSON.stringify($transactions)
+      );
+    } catch (e) {}
+    transactionsStore.set($transactions);
+  } else {
+    try {
+      const localStorageSlot = LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${from.toLowerCase()}_${chainId}`;
+      const lastTransactionsString = localStorage.getItem(localStorageSlot) || '[]';
+      const transactions = JSON.parse(lastTransactionsString);
+      const found = transactions.find((v: TransactionRecord) => v.hash === tx.hash);
+      if (found) {
+        const foundAsRecord = found as Record<string, unknown>;
+        const txAsRecord = tx as Record<string, unknown>;
+        for (const key of Object.keys(tx)) {
+          if ((!override && foundAsRecord[key] === undefined) || (override && txAsRecord[key] !== undefined)) {
+            foundAsRecord[key] = txAsRecord[key];
+          }
+        }
+      } else {
+        transactions.push(tx);
+      }
+      localStorage.setItem(localStorageSlot, JSON.stringify(transactions));
+    } catch (e) {}
+  }
+}
+
+function unloadTransactions() {
+  $transactions.splice(0, $transactions.length);
+  transactionsStore.set($transactions);
+}
+
+function loadTransactions(address: string, chainId: string) {
+  try {
+    const txString = localStorage.getItem(LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${address.toLowerCase()}_${chainId}`);
+    let transactions: TransactionRecord[] = [];
+    if (txString) {
+      transactions = JSON.parse(txString);
+    }
+    $transactions.splice(0, $transactions.length, ...transactions);
+    transactionsStore.set($transactions);
+  } catch (e) {}
+}
+
 // /////////////////////////////////////////////////////////////////////////////////
 export default (
   config: Web3wConfig
@@ -1356,6 +1472,8 @@ export default (
   wallet: WalletStore;
   flow: FlowStore;
 } => {
+  LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_PREVIOUS_WALLET_SLOT;
+  LOCAL_STORAGE_TRANSACTIONS_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_TRANSACTIONS_SLOT;
   config = {...(config || {})};
   if (!config.options || config.options.length === 0) {
     config.options = ['builtin'];
