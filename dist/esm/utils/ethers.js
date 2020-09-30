@@ -250,15 +250,6 @@ export function proxyWeb3Provider(provider, observers) {
             if (prop === 'getSigner') {
                 return getSignerProxy;
             }
-            else if (prop === 'signMessage') {
-                return getSignerProxy;
-            }
-            else if (prop === 'sendTransaction') {
-                return getSignerProxy;
-            }
-            else if (prop === 'connectUnchecked') {
-                return getSignerProxy;
-            }
             else {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 return obj[prop];

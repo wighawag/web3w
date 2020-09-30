@@ -368,12 +368,6 @@ export function proxyWeb3Provider(provider: Web3Provider, observers?: TxObserver
     get: (obj, prop): any => {
       if (prop === 'getSigner') {
         return getSignerProxy;
-      } else if (prop === 'signMessage') {
-        return getSignerProxy;
-      } else if (prop === 'sendTransaction') {
-        return getSignerProxy;
-      } else if (prop === 'connectUnchecked') {
-        return getSignerProxy;
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (obj as any)[prop];
