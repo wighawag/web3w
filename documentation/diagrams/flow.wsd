@@ -1,0 +1,7 @@
+@startuml
+State Flow
+Flow: inProgress
+Flow: executing
+Flow: executionError?
+Flow: error?
+@enduml

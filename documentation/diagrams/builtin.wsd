@@ -1,6 +1,6 @@
 @startuml
 Idle: state=Idle
-Idle: loading
+Idle: probing
 Idle: error?
 Idle: ...........................................
 Idle: probe()
@@ -10,5 +10,5 @@ Ready: available
 Ready: vendor?
 
 [*] --> Idle
-Idle -> Ready
+Idle -> Ready :probe
 @enduml

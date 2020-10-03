@@ -1,15 +1,22 @@
 @startuml
 Idle: state=Idle
-Idle: loading
+Idle: connecting
 Idle: error?
+
+Connected: state=Connected
+Connected: loadingData
+Connected: chainId
+Connected: notSupported
+Connected: error?
 
 Ready: state=Ready
 Ready: contracts
 Ready: chainId
-Ready: notSupported
 Ready: addresses
+Ready: error?
 
 
 [*] --> Idle
-Idle -> Ready
+Idle -> Connected
+Connected -> Ready
 @enduml

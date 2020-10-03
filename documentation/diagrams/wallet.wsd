@@ -1,12 +1,13 @@
 @startuml
 Idle: state=Idle
-Idle: loading
+Idle: connecting
 Idle: options
 Idle: selected?
 Idle: error?
 Idle: ................................
 Idle: acknowledgeError()
 Idle: connect(<type>)
+
 Locked: state=Locked
 Locked: unlocking
 Locked: options
@@ -15,7 +16,8 @@ Locked: error?
 Locked: ................................
 Locked: acknowledgeError()
 Locked: unlock()
-Locked: logout()
+Locked: disconnect()
+
 Ready: state=Ready
 Ready: options
 Ready: selected
@@ -24,14 +26,14 @@ Ready: error?
 Ready: pendingUserConfirmation?
 Ready: ................................
 Ready: acknowledgeError()
-Ready: logout()
-Ready: .contracts...
-Ready: .provider... // TODO
+Ready: disconnect()
 
 
 [*] --> Idle
-Idle -> Locked
-Idle -> Ready
-Locked -> Ready
-Ready -> Locked
+Idle -> Locked :connect
+Ready -[dashed]> Locked
+Idle -> Ready :connect
+Locked --> Ready :unlock
+Ready -> Idle :disconnect
+Locked -> Idle :disconnect
 @enduml
