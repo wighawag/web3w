@@ -120,7 +120,7 @@ Chain store
 The chain store has 3 main state
 
 - Idle (start there)
-- Connected : the chain is connected and the chainId is known. At that point web32 will attempt to load the contract (if provided as part of the config). If it fails because the chain is not supported or the contract info cannot be loaded, an error will be present but the chain will remain in the Connected state
+- Connected : the chain is connected and the chainId is known. At that point web3w will attempt to load the contract (if provided as part of the config). If it fails because the chain is not supported or the contract info cannot be loaded, an error will be present but the chain will remain in the Connected state
 - Ready : the chain is connected and the contract info is available. This also mean you can now call `wallet.contracts.<contractName>....`
 
 `$chain.connecting` is true until the chainId is fetched. it becomes false if there is an error or if the connection succeed (in which case, the new state is `Connected`)
