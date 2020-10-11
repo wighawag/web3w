@@ -105,7 +105,9 @@ export type ChainStore = Readable<ChainData> & {
 export type BalanceStore = Readable<BalanceData> & {
   acknowledgeError: () => void;
 };
-export type TransactionStore = Readable<TransactionRecord[]>;
+export type TransactionStore = Readable<TransactionRecord[]> & {
+  acknowledge: (hash: string, status: TransactionStatus) => void;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Abi = any[];
@@ -142,7 +144,7 @@ export type Web3WModule = {
   disconnect(): void;
 };
 
-type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[]; //TODO
+type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
 type ContractsInfos = {[name: string]: {address: string; abi: Abi}};
 export type ChainConfig = {
   chainId: string;
@@ -159,15 +161,17 @@ export type ChainConfigs =
 
 type BuiltinConfig = {
   autoProbe: boolean;
-}; // TODO
+};
+
+type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'unknown';
 
 type TransactionRecord = {
   hash: string;
   from: string;
   submissionBlockTime: number;
   acknowledged: boolean;
-  cancelled: boolean;
-  cancelationAcknowledged: boolean;
+  lastAcknowledgment?: TransactionStatus;
+  status: TransactionStatus;
   nonce: number;
   confirmations: number;
   finalized: boolean;
@@ -183,11 +187,12 @@ type TransactionRecord = {
   metadata?: unknown;
   lastCheck?: number;
   blockHash?: string;
-  success?: boolean;
-}; // TODO
+  blockNumber?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  events?: any[];
+};
 
 export type Web3wConfig = {
-  // TODO use Parial of ResolvedWeb3WConfig ?
   builtin?: BuiltinConfig;
   flow?: {autoSelect?: boolean; autoUnlock?: boolean};
   debug?: boolean;
@@ -196,6 +201,7 @@ export type Web3wConfig = {
   autoSelectPrevious?: boolean;
   localStoragePrefix?: string;
   transactions?: {
+    autoDelete?: boolean;
     finality?: number;
     pollingPeriod?: number;
   };
@@ -210,6 +216,7 @@ type ResolvedWeb3WConfig = {
   autoSelectPrevious: boolean;
   localStoragePrefix: string;
   transactions: {
+    autoDelete: boolean;
     finality: number;
     pollingPeriod: number;
   };
@@ -582,19 +589,17 @@ const _observers = {
   }: TransactionSent) => {
     logger.debug('onTxSent', {hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to});
     if (hash) {
-      const transactionRecord = {
+      const transactionRecord: TransactionRecord = {
         hash,
         from,
         acknowledged: false,
-        cancelled: false,
-        cancelationAcknowledged: false,
+        status: 'pending',
         to,
         nonce,
         gasLimit: gasLimit.toString(),
         gasPrice: gasPrice.toString(),
         data,
         value: value.toString(),
-        chainId,
         submissionBlockTime,
         confirmations: 0,
         finalized: false,
@@ -1427,7 +1432,7 @@ function flow_cancel() {
 }
 
 function addTransaction(from: string, chainId: string, tx: TransactionRecord) {
-  addOrChangeTransaction(from, chainId, tx, false);
+  addOrChangeTransaction(from, chainId, tx, true);
 }
 function updateTransaction(
   from: string,
@@ -1454,7 +1459,7 @@ function addOrChangeTransaction(from: string, chainId: string, tx: TransactionRe
       const foundAsRecord = found as Record<string, unknown>;
       const txAsRecord = tx as Record<string, unknown>;
       for (const key of Object.keys(txAsRecord)) {
-        if ((!override && foundAsRecord[key] === undefined) || (override && txAsRecord[key] !== undefined)) {
+        if (override || (!override && foundAsRecord[key] === undefined)) {
           foundAsRecord[key] = txAsRecord[key];
         }
       }
@@ -1549,7 +1554,7 @@ async function listenForTxReceipts(address: string, chainId: string) {
     try {
       latestBlock = await _ethersProvider.getBlock('latest');
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       break;
     }
 
@@ -1572,7 +1577,7 @@ async function listenForTxReceipts(address: string, chainId: string) {
       try {
         stableNonce = await _ethersProvider.getTransactionCount(address, latestBlock.number - STABLE_BLOCK_INTERVAL);
       } catch (e) {
-        console.error(e);
+        logger.error(e);
         break;
       }
     }
@@ -1591,7 +1596,7 @@ async function listenForTxReceipts(address: string, chainId: string) {
     try {
       currentNonce = await _ethersProvider.getTransactionCount(address);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       break;
     }
 
@@ -1609,7 +1614,7 @@ async function listenForTxReceipts(address: string, chainId: string) {
     try {
       receipt = await _ethersProvider.getTransactionReceipt(tx.hash);
     } catch (e) {
-      console.error(e);
+      logger.error(e);
       continue;
     }
 
@@ -1623,47 +1628,78 @@ async function listenForTxReceipts(address: string, chainId: string) {
     const updatedTxFields: Partial<TransactionRecord> & {hash: string} = {
       hash: tx.hash,
     };
-    if (!receipt) {
+    let deleteTx = false;
+    if (!receipt || !receipt.blockHash) {
       if (stableNonce > tx.nonce) {
-        updatedTxFields.cancelled = true;
+        updatedTxFields.status = 'cancelled';
         updatedTxFields.finalized = true;
+        if (tx.acknowledged || _config.transactions.autoDelete) {
+          deleteTx = true;
+        }
       } else if (currentNonce > tx.nonce) {
-        updatedTxFields.cancelled = true;
+        updatedTxFields.status = 'cancelled';
       }
       if (tx.blockHash) {
+        updatedTxFields.status = 'pending';
         updatedTxFields.blockHash = undefined;
-        updatedTxFields.success = undefined;
+        updatedTxFields.blockNumber = undefined;
         updatedTxFields.confirmations = 0;
+        updatedTxFields.events = undefined;
       }
     } else {
-      if (receipt.blockHash) {
-        if (receipt.status !== undefined) {
-          updatedTxFields.success = receipt.status === 1;
+      if (receipt.status !== undefined) {
+        const success = receipt.status === 1;
+        updatedTxFields.status = success ? 'success' : 'failure';
+        if (success) {
+          updatedTxFields.events = [];
+          // TODO
         }
-        updatedTxFields.blockHash = receipt.blockHash;
-        updatedTxFields.confirmations = receipt.confirmations;
-        if (receipt.confirmations >= STABLE_BLOCK_INTERVAL) {
-          updatedTxFields.finalized = true;
+      } else {
+        updatedTxFields.status = 'unknown'; // TODO check?
+        // TODO could check if event exists
+      }
+      updatedTxFields.blockHash = receipt.blockHash;
+      updatedTxFields.confirmations = receipt.confirmations;
+      if (receipt.confirmations >= STABLE_BLOCK_INTERVAL) {
+        updatedTxFields.finalized = true;
+        if (tx.acknowledged || _config.transactions.autoDelete) {
+          deleteTx = true;
         }
       }
     }
 
-    // TODO ?
-    // if (
-    //   tx.success !== updatedTxFields.success ||
-    //   tx.cancelled !== updatedTxFields.cancelled
-    // ) {
-    //   updatedTxFields.lastChanged = latestBlock.timestamp;
-    // }
+    if (tx.status !== updatedTxFields.status) {
+      // updatedTxFields.lastChanged = latestBlock.timestamp;
+      updatedTxFields.acknowledged = false;
+    }
 
-    updatedTxFields.lastCheck = latestBlock.timestamp;
-    try {
-      updateTransaction(address, chainId, updatedTxFields, true);
-    } catch (e) {
-      console.error(e);
+    if (deleteTx) {
+      deleteTransaction(tx.hash);
+    } else {
+      updatedTxFields.lastCheck = latestBlock.timestamp;
+      try {
+        updateTransaction(address, chainId, updatedTxFields, true);
+      } catch (e) {
+        logger.error(e);
+      }
     }
   }
   txChecking = false;
+}
+
+function deleteTransaction(hash: string) {
+  logger.log(`deleting  ${hash}`);
+  if ($wallet.address && $chain.chainId) {
+    const foundIndex = $transactions.findIndex((v: TransactionRecord) => v.hash === hash);
+    $transactions.splice(foundIndex, 1);
+    try {
+      localStorage.setItem(
+        LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${$wallet.address.toLowerCase()}_${$chain.chainId}`,
+        JSON.stringify($transactions)
+      );
+    } catch (e) {}
+    transactionsStore.set($transactions);
+  }
 }
 
 // /////////////////////////////////////////////////////////////////////////////////
@@ -1691,6 +1727,7 @@ export default (
     autoSelectPrevious: config.autoSelectPrevious ? true : false,
     localStoragePrefix: config.localStoragePrefix || '',
     transactions: {
+      autoDelete: true,
       finality: (config.transactions && config.transactions.finality) || 12,
       pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
     },
@@ -1749,6 +1786,26 @@ export default (
   return {
     transactions: {
       subscribe: transactionsStore.subscribe,
+      acknowledge(hash: string, status: TransactionStatus) {
+        if ($wallet.address && $chain.chainId) {
+          const found = $transactions.find((v: TransactionRecord) => v.hash === hash);
+          if (found) {
+            if (found.finalized) {
+              deleteTransaction(hash);
+            } else {
+              found.lastAcknowledgment = status;
+              found.acknowledged = true;
+              try {
+                localStorage.setItem(
+                  LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${$wallet.address.toLowerCase()}_${$chain.chainId}`,
+                  JSON.stringify($transactions)
+                );
+              } catch (e) {}
+              transactionsStore.set($transactions);
+            }
+          }
+        }
+      },
     },
     balance: {
       subscribe: balanceStore.subscribe,

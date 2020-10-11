@@ -248,7 +248,9 @@ declare module "index" {
     export type BalanceStore = Readable<BalanceData> & {
         acknowledgeError: () => void;
     };
-    export type TransactionStore = Readable<TransactionRecord[]>;
+    export type TransactionStore = Readable<TransactionRecord[]> & {
+        acknowledge: (hash: string, status: TransactionStatus) => void;
+    };
     type Abi = any[];
     type AnyFunction = (...args: any[]) => any;
     interface RequestArguments {
@@ -301,12 +303,14 @@ declare module "index" {
     type BuiltinConfig = {
         autoProbe: boolean;
     };
+    type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'unknown';
     type TransactionRecord = {
         hash: string;
+        from: string;
         submissionBlockTime: number;
         acknowledged: boolean;
-        cancelled: boolean;
-        cancelationAcknowledged: boolean;
+        lastAcknowledgment?: TransactionStatus;
+        status: TransactionStatus;
         nonce: number;
         confirmations: number;
         finalized: boolean;
@@ -322,7 +326,8 @@ declare module "index" {
         metadata?: unknown;
         lastCheck?: number;
         blockHash?: string;
-        success?: boolean;
+        blockNumber?: number;
+        events?: any[];
     };
     export type Web3wConfig = {
         builtin?: BuiltinConfig;
@@ -336,6 +341,7 @@ declare module "index" {
         autoSelectPrevious?: boolean;
         localStoragePrefix?: string;
         transactions?: {
+            autoDelete?: boolean;
             finality?: number;
             pollingPeriod?: number;
         };

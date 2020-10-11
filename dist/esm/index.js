@@ -361,15 +361,13 @@ const _observers = {
                 hash,
                 from,
                 acknowledged: false,
-                cancelled: false,
-                cancelationAcknowledged: false,
+                status: 'pending',
                 to,
                 nonce,
                 gasLimit: gasLimit.toString(),
                 gasPrice: gasPrice.toString(),
                 data,
                 value: value.toString(),
-                chainId,
                 submissionBlockTime,
                 confirmations: 0,
                 finalized: false,
@@ -1194,7 +1192,7 @@ function flow_cancel() {
     set(flowStore, { inProgress: false, error: undefined, executionError: undefined, executing: false });
 }
 function addTransaction(from, chainId, tx) {
-    addOrChangeTransaction(from, chainId, tx, false);
+    addOrChangeTransaction(from, chainId, tx, true);
 }
 function updateTransaction(from, chainId, tx, override) {
     const found = $transactions.find((v) => v.hash === tx.hash);
@@ -1214,7 +1212,7 @@ function addOrChangeTransaction(from, chainId, tx, override) {
             const foundAsRecord = found;
             const txAsRecord = tx;
             for (const key of Object.keys(txAsRecord)) {
-                if ((!override && foundAsRecord[key] === undefined) || (override && txAsRecord[key] !== undefined)) {
+                if (override || (!override && foundAsRecord[key] === undefined)) {
                     foundAsRecord[key] = txAsRecord[key];
                 }
             }
@@ -1307,7 +1305,7 @@ function listenForTxReceipts(address, chainId) {
                 latestBlock = yield _ethersProvider.getBlock('latest');
             }
             catch (e) {
-                console.error(e);
+                logger.error(e);
                 break;
             }
             if (tx.finalized) {
@@ -1329,7 +1327,7 @@ function listenForTxReceipts(address, chainId) {
                     stableNonce = yield _ethersProvider.getTransactionCount(address, latestBlock.number - STABLE_BLOCK_INTERVAL);
                 }
                 catch (e) {
-                    console.error(e);
+                    logger.error(e);
                     break;
                 }
             }
@@ -1348,7 +1346,7 @@ function listenForTxReceipts(address, chainId) {
                 currentNonce = yield _ethersProvider.getTransactionCount(address);
             }
             catch (e) {
-                console.error(e);
+                logger.error(e);
                 break;
             }
             // ----------------- RECEIPT --------------------------
@@ -1366,7 +1364,7 @@ function listenForTxReceipts(address, chainId) {
                 receipt = yield _ethersProvider.getTransactionReceipt(tx.hash);
             }
             catch (e) {
-                console.error(e);
+                logger.error(e);
                 continue;
             }
             // ----------------- PROCESS TRANSACTION STATE --------------------------
@@ -1379,49 +1377,79 @@ function listenForTxReceipts(address, chainId) {
             const updatedTxFields = {
                 hash: tx.hash,
             };
-            if (!receipt) {
+            let deleteTx = false;
+            if (!receipt || !receipt.blockHash) {
                 if (stableNonce > tx.nonce) {
-                    updatedTxFields.cancelled = true;
+                    updatedTxFields.status = 'cancelled';
                     updatedTxFields.finalized = true;
+                    if (tx.acknowledged || _config.transactions.autoDelete) {
+                        deleteTx = true;
+                    }
                 }
                 else if (currentNonce > tx.nonce) {
-                    updatedTxFields.cancelled = true;
+                    updatedTxFields.status = 'cancelled';
                 }
                 if (tx.blockHash) {
+                    updatedTxFields.status = 'pending';
                     updatedTxFields.blockHash = undefined;
-                    updatedTxFields.success = undefined;
+                    updatedTxFields.blockNumber = undefined;
                     updatedTxFields.confirmations = 0;
+                    updatedTxFields.events = undefined;
                 }
             }
             else {
-                if (receipt.blockHash) {
-                    if (receipt.status !== undefined) {
-                        updatedTxFields.success = receipt.status === 1;
+                if (receipt.status !== undefined) {
+                    const success = receipt.status === 1;
+                    updatedTxFields.status = success ? 'success' : 'failure';
+                    if (success) {
+                        updatedTxFields.events = [];
+                        // TODO
                     }
-                    updatedTxFields.blockHash = receipt.blockHash;
-                    updatedTxFields.confirmations = receipt.confirmations;
-                    if (receipt.confirmations >= STABLE_BLOCK_INTERVAL) {
-                        updatedTxFields.finalized = true;
+                }
+                else {
+                    updatedTxFields.status = 'unknown'; // TODO check?
+                    // TODO could check if event exists
+                }
+                updatedTxFields.blockHash = receipt.blockHash;
+                updatedTxFields.confirmations = receipt.confirmations;
+                if (receipt.confirmations >= STABLE_BLOCK_INTERVAL) {
+                    updatedTxFields.finalized = true;
+                    if (tx.acknowledged || _config.transactions.autoDelete) {
+                        deleteTx = true;
                     }
                 }
             }
-            // TODO ?
-            // if (
-            //   tx.success !== updatedTxFields.success ||
-            //   tx.cancelled !== updatedTxFields.cancelled
-            // ) {
-            //   updatedTxFields.lastChanged = latestBlock.timestamp;
-            // }
-            updatedTxFields.lastCheck = latestBlock.timestamp;
-            try {
-                updateTransaction(address, chainId, updatedTxFields, true);
+            if (tx.status !== updatedTxFields.status) {
+                // updatedTxFields.lastChanged = latestBlock.timestamp;
+                updatedTxFields.acknowledged = false;
             }
-            catch (e) {
-                console.error(e);
+            if (deleteTx) {
+                deleteTransaction(tx.hash);
+            }
+            else {
+                updatedTxFields.lastCheck = latestBlock.timestamp;
+                try {
+                    updateTransaction(address, chainId, updatedTxFields, true);
+                }
+                catch (e) {
+                    logger.error(e);
+                }
             }
         }
         txChecking = false;
     });
+}
+function deleteTransaction(hash) {
+    logger.log(`deleting  ${hash}`);
+    if ($wallet.address && $chain.chainId) {
+        const foundIndex = $transactions.findIndex((v) => v.hash === hash);
+        $transactions.splice(foundIndex, 1);
+        try {
+            localStorage.setItem(LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${$wallet.address.toLowerCase()}_${$chain.chainId}`, JSON.stringify($transactions));
+        }
+        catch (e) { }
+        transactionsStore.set($transactions);
+    }
 }
 // /////////////////////////////////////////////////////////////////////////////////
 export default (config) => {
@@ -1439,6 +1467,7 @@ export default (config) => {
         autoSelectPrevious: config.autoSelectPrevious ? true : false,
         localStoragePrefix: config.localStoragePrefix || '',
         transactions: {
+            autoDelete: true,
             finality: (config.transactions && config.transactions.finality) || 12,
             pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
         },
@@ -1492,6 +1521,25 @@ export default (config) => {
     return {
         transactions: {
             subscribe: transactionsStore.subscribe,
+            acknowledge(hash, status) {
+                if ($wallet.address && $chain.chainId) {
+                    const found = $transactions.find((v) => v.hash === hash);
+                    if (found) {
+                        if (found.finalized) {
+                            deleteTransaction(hash);
+                        }
+                        else {
+                            found.lastAcknowledgment = status;
+                            found.acknowledged = true;
+                            try {
+                                localStorage.setItem(LOCAL_STORAGE_TRANSACTIONS_SLOT + `_${$wallet.address.toLowerCase()}_${$chain.chainId}`, JSON.stringify($transactions));
+                            }
+                            catch (e) { }
+                            transactionsStore.set($transactions);
+                        }
+                    }
+                }
+            },
         },
         balance: {
             subscribe: balanceStore.subscribe,

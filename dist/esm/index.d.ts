@@ -83,7 +83,9 @@ export declare type ChainStore = Readable<ChainData> & {
 export declare type BalanceStore = Readable<BalanceData> & {
     acknowledgeError: () => void;
 };
-export declare type TransactionStore = Readable<TransactionRecord[]>;
+export declare type TransactionStore = Readable<TransactionRecord[]> & {
+    acknowledge: (hash: string, status: TransactionStatus) => void;
+};
 declare type Abi = any[];
 declare type AnyFunction = (...args: any[]) => any;
 interface RequestArguments {
@@ -136,13 +138,14 @@ export declare type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: 
 declare type BuiltinConfig = {
     autoProbe: boolean;
 };
+declare type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'unknown';
 declare type TransactionRecord = {
     hash: string;
     from: string;
     submissionBlockTime: number;
     acknowledged: boolean;
-    cancelled: boolean;
-    cancelationAcknowledged: boolean;
+    lastAcknowledgment?: TransactionStatus;
+    status: TransactionStatus;
     nonce: number;
     confirmations: number;
     finalized: boolean;
@@ -158,7 +161,8 @@ declare type TransactionRecord = {
     metadata?: unknown;
     lastCheck?: number;
     blockHash?: string;
-    success?: boolean;
+    blockNumber?: number;
+    events?: any[];
 };
 export declare type Web3wConfig = {
     builtin?: BuiltinConfig;
@@ -172,6 +176,7 @@ export declare type Web3wConfig = {
     autoSelectPrevious?: boolean;
     localStoragePrefix?: string;
     transactions?: {
+        autoDelete?: boolean;
         finality?: number;
         pollingPeriod?: number;
     };
