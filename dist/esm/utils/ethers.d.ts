@@ -37,6 +37,7 @@ export declare type Transaction = {
     value?: BigNumberish;
 };
 export declare type TransactionSent = {
+    submissionBlockTime: number;
     hash: string;
     from: string;
     chainId: string;

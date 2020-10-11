@@ -37,6 +37,7 @@ export type Transaction = {
   value?: BigNumberish;
 };
 export type TransactionSent = {
+  submissionBlockTime: number;
   hash: string;
   from: string;
   chainId: string;
@@ -269,7 +270,9 @@ function proxySigner(
           onTxCancelled(txRequest);
           throw e;
         }
-        onTxSent({...tx, chainId});
+        const latestBlock = await signer.provider.getBlock('latest');
+        const submissionBlockTime = latestBlock.timestamp;
+        onTxSent({...tx, submissionBlockTime, chainId});
         return tx;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

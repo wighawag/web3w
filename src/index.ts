@@ -163,11 +163,15 @@ type BuiltinConfig = {
 
 type TransactionRecord = {
   hash: string;
+  from: string;
+  submissionBlockTime: number;
   acknowledged: boolean;
   cancelled: boolean;
   cancelationAcknowledged: boolean;
+  nonce: number;
+  confirmations: number;
+  finalized: boolean;
   to?: string;
-  nonce?: number;
   gasLimit?: string;
   gasPrice?: string;
   data?: string;
@@ -177,12 +181,13 @@ type TransactionRecord = {
   args?: unknown[];
   eventsABI?: EventsABI;
   metadata?: unknown;
-  lastCheckBlock?: number;
+  lastCheck?: number;
   blockHash?: string;
   success?: boolean;
 }; // TODO
 
 export type Web3wConfig = {
+  // TODO use Parial of ResolvedWeb3WConfig ?
   builtin?: BuiltinConfig;
   flow?: {autoSelect?: boolean; autoUnlock?: boolean};
   debug?: boolean;
@@ -190,6 +195,24 @@ export type Web3wConfig = {
   options?: ModuleOptions;
   autoSelectPrevious?: boolean;
   localStoragePrefix?: string;
+  transactions?: {
+    finality?: number;
+    pollingPeriod?: number;
+  };
+};
+
+type ResolvedWeb3WConfig = {
+  builtin: BuiltinConfig;
+  flow: {autoSelect: boolean; autoUnlock: boolean};
+  debug: boolean;
+  chainConfigs: ChainConfigs;
+  options: ModuleOptions;
+  autoSelectPrevious: boolean;
+  localStoragePrefix: string;
+  transactions: {
+    finality: number;
+    pollingPeriod: number;
+  };
 };
 
 const isBrowser = typeof window != 'undefined';
@@ -309,7 +332,7 @@ let _builtinWeb3Provider: WindowWeb3Provider | undefined;
 let _chainConfigs: ChainConfigs;
 let _currentModule: Web3WModule | undefined;
 let _options: ModuleOptions;
-let _config: Web3wConfig;
+let _config: ResolvedWeb3WConfig;
 
 let _flowPromise: Promise<Contracts> | undefined;
 let _flowResolve: ((val: Contracts) => void) | undefined;
@@ -545,7 +568,18 @@ const _observers = {
     logger.debug('onTxCancelled', {txRequest});
     cancelUserAttention('transaction');
   },
-  onTxSent: ({hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to}: TransactionSent) => {
+  onTxSent: ({
+    hash,
+    from,
+    gasLimit,
+    nonce,
+    gasPrice,
+    data,
+    value,
+    chainId,
+    to,
+    submissionBlockTime,
+  }: TransactionSent) => {
     logger.debug('onTxSent', {hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to});
     if (hash) {
       const transactionRecord = {
@@ -561,6 +595,9 @@ const _observers = {
         data,
         value: value.toString(),
         chainId,
+        submissionBlockTime,
+        confirmations: 0,
+        finalized: false,
       };
       addTransaction(from, chainId, transactionRecord);
     }
@@ -619,7 +656,7 @@ const _observers = {
         gasPrice: overrides?.gasPrice?.toString(),
         value: overrides?.value?.toString(),
       };
-      addTransaction(from, chainId, transactionRecord);
+      updateTransaction(from, chainId, transactionRecord, false);
     }
   },
 };
@@ -1392,9 +1429,18 @@ function flow_cancel() {
 function addTransaction(from: string, chainId: string, tx: TransactionRecord) {
   addOrChangeTransaction(from, chainId, tx, false);
 }
-// function updateTransaction(from: string, chainId: string, tx: TransactionRecord) {
-//   addOrChangeTransaction(from, chainId, tx, true);
-// }
+function updateTransaction(
+  from: string,
+  chainId: string,
+  tx: Partial<TransactionRecord> & {hash: string},
+  override: boolean
+) {
+  const found = $transactions.find((v: TransactionRecord) => v.hash === tx.hash);
+  if (!found) {
+    throw new Error('cannot update non-existing Transaction record');
+  }
+  addOrChangeTransaction(from, chainId, tx as TransactionRecord, override);
+}
 function addOrChangeTransaction(from: string, chainId: string, tx: TransactionRecord, override: boolean) {
   if (
     $wallet.address &&
@@ -1447,6 +1493,7 @@ function addOrChangeTransaction(from: string, chainId: string, tx: TransactionRe
 function unloadTransactions() {
   $transactions.splice(0, $transactions.length);
   transactionsStore.set($transactions);
+  stopManagingTransactions();
 }
 
 function loadTransactions(address: string, chainId: string) {
@@ -1458,7 +1505,165 @@ function loadTransactions(address: string, chainId: string) {
     }
     $transactions.splice(0, $transactions.length, ...transactions);
     transactionsStore.set($transactions);
+    manageTransactions(address, chainId);
   } catch (e) {}
+}
+
+let transactionManager: NodeJS.Timeout | undefined;
+function manageTransactions(address: string, chainId: string) {
+  stopManagingTransactions();
+  listenForTxReceipts(address, chainId);
+  transactionManager = setInterval(
+    () => listenForTxReceipts(address, chainId),
+    _config.transactions.pollingPeriod * 1000
+  );
+}
+function stopManagingTransactions() {
+  if (transactionManager) {
+    clearInterval(transactionManager);
+    transactionManager = undefined;
+  }
+}
+
+let txChecking = false;
+async function listenForTxReceipts(address: string, chainId: string) {
+  if (txChecking) {
+    // do not listen twice
+    return;
+  }
+  txChecking = true;
+  const STABLE_BLOCK_INTERVAL = _config.transactions.finality;
+  const txs = $transactions.concat();
+  for (const tx of txs) {
+    // ----------------- LATEST BLOCK --------------------------
+    if (!_ethersProvider) {
+      break;
+    }
+    if ($wallet.address !== address || $chain.chainId !== chainId) {
+      break;
+    }
+    if (!transactionManager) {
+      break;
+    }
+    let latestBlock;
+    try {
+      latestBlock = await _ethersProvider.getBlock('latest');
+    } catch (e) {
+      console.error(e);
+      break;
+    }
+
+    if (tx.finalized) {
+      continue;
+    }
+
+    // ----------------- STABLE NONCE --------------------------
+    if (!_ethersProvider) {
+      break;
+    }
+    if ($wallet.address !== address || $chain.chainId !== chainId) {
+      break;
+    }
+    if (!transactionManager) {
+      break;
+    }
+    let stableNonce = 0;
+    if (latestBlock.number > STABLE_BLOCK_INTERVAL) {
+      try {
+        stableNonce = await _ethersProvider.getTransactionCount(address, latestBlock.number - STABLE_BLOCK_INTERVAL);
+      } catch (e) {
+        console.error(e);
+        break;
+      }
+    }
+
+    // ----------------- CURRENT NONCE --------------------------
+    if (!_ethersProvider) {
+      break;
+    }
+    if ($wallet.address !== address || $chain.chainId !== chainId) {
+      break;
+    }
+    if (!transactionManager) {
+      break;
+    }
+    let currentNonce = 0;
+    try {
+      currentNonce = await _ethersProvider.getTransactionCount(address);
+    } catch (e) {
+      console.error(e);
+      break;
+    }
+
+    // ----------------- RECEIPT --------------------------
+    if (!_ethersProvider) {
+      break;
+    }
+    if ($wallet.address !== address || $chain.chainId !== chainId) {
+      break;
+    }
+    if (!transactionManager) {
+      break;
+    }
+    let receipt;
+    try {
+      receipt = await _ethersProvider.getTransactionReceipt(tx.hash);
+    } catch (e) {
+      console.error(e);
+      continue;
+    }
+
+    // ----------------- PROCESS TRANSACTION STATE --------------------------
+    if ($wallet.address !== address || $chain.chainId !== chainId) {
+      break;
+    }
+    if (!transactionManager) {
+      break;
+    }
+    const updatedTxFields: Partial<TransactionRecord> & {hash: string} = {
+      hash: tx.hash,
+    };
+    if (!receipt) {
+      if (stableNonce > tx.nonce) {
+        updatedTxFields.cancelled = true;
+        updatedTxFields.finalized = true;
+      } else if (currentNonce > tx.nonce) {
+        updatedTxFields.cancelled = true;
+      }
+      if (tx.blockHash) {
+        updatedTxFields.blockHash = undefined;
+        updatedTxFields.success = undefined;
+        updatedTxFields.confirmations = 0;
+      }
+    } else {
+      if (receipt.blockHash) {
+        if (receipt.status !== undefined) {
+          updatedTxFields.success = receipt.status === 1;
+        }
+        updatedTxFields.blockHash = receipt.blockHash;
+        updatedTxFields.confirmations = receipt.confirmations;
+        if (receipt.confirmations >= STABLE_BLOCK_INTERVAL) {
+          updatedTxFields.finalized = true;
+        }
+      }
+    }
+
+    // TODO ?
+    // if (
+    //   tx.success !== updatedTxFields.success ||
+    //   tx.cancelled !== updatedTxFields.cancelled
+    // ) {
+    //   updatedTxFields.lastChanged = latestBlock.timestamp;
+    // }
+
+    updatedTxFields.lastCheck = latestBlock.timestamp;
+    try {
+      updateTransaction(address, chainId, updatedTxFields, true);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  txChecking = false;
 }
 
 // /////////////////////////////////////////////////////////////////////////////////
@@ -1472,16 +1677,31 @@ export default (
   wallet: WalletStore;
   flow: FlowStore;
 } => {
-  LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_PREVIOUS_WALLET_SLOT;
-  LOCAL_STORAGE_TRANSACTIONS_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_TRANSACTIONS_SLOT;
-  config = {...(config || {})};
-  if (!config.options || config.options.length === 0) {
-    config.options = ['builtin'];
+  _config = {
+    builtin: {
+      autoProbe: config.builtin ? config.builtin.autoProbe : false,
+    },
+    flow: {
+      autoSelect: config.flow && config.flow.autoSelect ? true : false,
+      autoUnlock: config.flow && config.flow.autoUnlock ? true : false,
+    },
+    debug: config.debug || false,
+    chainConfigs: config.chainConfigs,
+    options: config.options || [],
+    autoSelectPrevious: config.autoSelectPrevious ? true : false,
+    localStoragePrefix: config.localStoragePrefix || '',
+    transactions: {
+      finality: (config.transactions && config.transactions.finality) || 12,
+      pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
+    },
+  };
+  if (!_config.options || _config.options.length === 0) {
+    _config.options = ['builtin'];
   }
-  config.builtin = config.builtin || {autoProbe: false};
-  config.flow = config.flow || {autoSelect: false, autoUnlock: false};
-  const {debug, chainConfigs, builtin} = config;
-  _config = config;
+
+  LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = _config.localStoragePrefix + LOCAL_STORAGE_PREVIOUS_WALLET_SLOT;
+  LOCAL_STORAGE_TRANSACTIONS_SLOT = _config.localStoragePrefix + LOCAL_STORAGE_TRANSACTIONS_SLOT;
+  const {debug, chainConfigs, builtin} = _config;
 
   _chainConfigs = chainConfigs;
   if (debug && typeof window !== 'undefined') {
@@ -1491,7 +1711,7 @@ export default (
     (window as any).$transactions = $transactions;
   }
 
-  _options = config.options;
+  _options = _config.options;
   set(walletStore, {
     state: 'Idle',
     options: _options.map((m) => {

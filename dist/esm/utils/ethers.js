@@ -169,7 +169,9 @@ function proxySigner(signer, applyMap, { onTxRequested, onTxCancelled, onTxSent,
                 onTxCancelled(txRequest);
                 throw e;
             }
-            onTxSent(Object.assign(Object.assign({}, tx), { chainId }));
+            const latestBlock = yield signer.provider.getBlock('latest');
+            const submissionBlockTime = latestBlock.timestamp;
+            onTxSent(Object.assign(Object.assign({}, tx), { submissionBlockTime, chainId }));
             return tx;
         }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

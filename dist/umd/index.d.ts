@@ -138,11 +138,14 @@ declare type BuiltinConfig = {
 };
 declare type TransactionRecord = {
     hash: string;
+    submissionBlockTime: number;
     acknowledged: boolean;
     cancelled: boolean;
     cancelationAcknowledged: boolean;
+    nonce: number;
+    confirmations: number;
+    finalized: boolean;
     to?: string;
-    nonce?: number;
     gasLimit?: string;
     gasPrice?: string;
     data?: string;
@@ -152,7 +155,7 @@ declare type TransactionRecord = {
     args?: unknown[];
     eventsABI?: EventsABI;
     metadata?: unknown;
-    lastCheckBlock?: number;
+    lastCheck?: number;
     blockHash?: string;
     success?: boolean;
 };
@@ -167,6 +170,10 @@ export declare type Web3wConfig = {
     options?: ModuleOptions;
     autoSelectPrevious?: boolean;
     localStoragePrefix?: string;
+    transactions?: {
+        finality?: number;
+        pollingPeriod?: number;
+    };
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
 declare function disconnect(config?: {

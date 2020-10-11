@@ -354,7 +354,7 @@ const _observers = {
         logger.debug('onTxCancelled', { txRequest });
         cancelUserAttention('transaction');
     },
-    onTxSent: ({ hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to }) => {
+    onTxSent: ({ hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to, submissionBlockTime, }) => {
         logger.debug('onTxSent', { hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to });
         if (hash) {
             const transactionRecord = {
@@ -370,6 +370,9 @@ const _observers = {
                 data,
                 value: value.toString(),
                 chainId,
+                submissionBlockTime,
+                confirmations: 0,
+                finalized: false,
             };
             addTransaction(from, chainId, transactionRecord);
         }
@@ -418,7 +421,7 @@ const _observers = {
                 gasPrice: (_b = overrides === null || overrides === void 0 ? void 0 : overrides.gasPrice) === null || _b === void 0 ? void 0 : _b.toString(),
                 value: (_c = overrides === null || overrides === void 0 ? void 0 : overrides.value) === null || _c === void 0 ? void 0 : _c.toString(),
             };
-            addTransaction(from, chainId, transactionRecord);
+            updateTransaction(from, chainId, transactionRecord, false);
         }
     },
 };
@@ -1193,9 +1196,13 @@ function flow_cancel() {
 function addTransaction(from, chainId, tx) {
     addOrChangeTransaction(from, chainId, tx, false);
 }
-// function updateTransaction(from: string, chainId: string, tx: TransactionRecord) {
-//   addOrChangeTransaction(from, chainId, tx, true);
-// }
+function updateTransaction(from, chainId, tx, override) {
+    const found = $transactions.find((v) => v.hash === tx.hash);
+    if (!found) {
+        throw new Error('cannot update non-existing Transaction record');
+    }
+    addOrChangeTransaction(from, chainId, tx, override);
+}
 function addOrChangeTransaction(from, chainId, tx, override) {
     if ($wallet.address &&
         $wallet.address.toLowerCase() === from.toLowerCase() &&
@@ -1247,6 +1254,7 @@ function addOrChangeTransaction(from, chainId, tx, override) {
 function unloadTransactions() {
     $transactions.splice(0, $transactions.length);
     transactionsStore.set($transactions);
+    stopManagingTransactions();
 }
 function loadTransactions(address, chainId) {
     try {
@@ -1257,21 +1265,190 @@ function loadTransactions(address, chainId) {
         }
         $transactions.splice(0, $transactions.length, ...transactions);
         transactionsStore.set($transactions);
+        manageTransactions(address, chainId);
     }
     catch (e) { }
 }
+let transactionManager;
+function manageTransactions(address, chainId) {
+    stopManagingTransactions();
+    listenForTxReceipts(address, chainId);
+    transactionManager = setInterval(() => listenForTxReceipts(address, chainId), _config.transactions.pollingPeriod * 1000);
+}
+function stopManagingTransactions() {
+    if (transactionManager) {
+        clearInterval(transactionManager);
+        transactionManager = undefined;
+    }
+}
+let txChecking = false;
+function listenForTxReceipts(address, chainId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (txChecking) {
+            // do not listen twice
+            return;
+        }
+        txChecking = true;
+        const STABLE_BLOCK_INTERVAL = _config.transactions.finality;
+        const txs = $transactions.concat();
+        for (const tx of txs) {
+            // ----------------- LATEST BLOCK --------------------------
+            if (!_ethersProvider) {
+                break;
+            }
+            if ($wallet.address !== address || $chain.chainId !== chainId) {
+                break;
+            }
+            if (!transactionManager) {
+                break;
+            }
+            let latestBlock;
+            try {
+                latestBlock = yield _ethersProvider.getBlock('latest');
+            }
+            catch (e) {
+                console.error(e);
+                break;
+            }
+            if (tx.finalized) {
+                continue;
+            }
+            // ----------------- STABLE NONCE --------------------------
+            if (!_ethersProvider) {
+                break;
+            }
+            if ($wallet.address !== address || $chain.chainId !== chainId) {
+                break;
+            }
+            if (!transactionManager) {
+                break;
+            }
+            let stableNonce = 0;
+            if (latestBlock.number > STABLE_BLOCK_INTERVAL) {
+                try {
+                    stableNonce = yield _ethersProvider.getTransactionCount(address, latestBlock.number - STABLE_BLOCK_INTERVAL);
+                }
+                catch (e) {
+                    console.error(e);
+                    break;
+                }
+            }
+            // ----------------- CURRENT NONCE --------------------------
+            if (!_ethersProvider) {
+                break;
+            }
+            if ($wallet.address !== address || $chain.chainId !== chainId) {
+                break;
+            }
+            if (!transactionManager) {
+                break;
+            }
+            let currentNonce = 0;
+            try {
+                currentNonce = yield _ethersProvider.getTransactionCount(address);
+            }
+            catch (e) {
+                console.error(e);
+                break;
+            }
+            // ----------------- RECEIPT --------------------------
+            if (!_ethersProvider) {
+                break;
+            }
+            if ($wallet.address !== address || $chain.chainId !== chainId) {
+                break;
+            }
+            if (!transactionManager) {
+                break;
+            }
+            let receipt;
+            try {
+                receipt = yield _ethersProvider.getTransactionReceipt(tx.hash);
+            }
+            catch (e) {
+                console.error(e);
+                continue;
+            }
+            // ----------------- PROCESS TRANSACTION STATE --------------------------
+            if ($wallet.address !== address || $chain.chainId !== chainId) {
+                break;
+            }
+            if (!transactionManager) {
+                break;
+            }
+            const updatedTxFields = {
+                hash: tx.hash,
+            };
+            if (!receipt) {
+                if (stableNonce > tx.nonce) {
+                    updatedTxFields.cancelled = true;
+                    updatedTxFields.finalized = true;
+                }
+                else if (currentNonce > tx.nonce) {
+                    updatedTxFields.cancelled = true;
+                }
+                if (tx.blockHash) {
+                    updatedTxFields.blockHash = undefined;
+                    updatedTxFields.success = undefined;
+                    updatedTxFields.confirmations = 0;
+                }
+            }
+            else {
+                if (receipt.blockHash) {
+                    if (receipt.status !== undefined) {
+                        updatedTxFields.success = receipt.status === 1;
+                    }
+                    updatedTxFields.blockHash = receipt.blockHash;
+                    updatedTxFields.confirmations = receipt.confirmations;
+                    if (receipt.confirmations >= STABLE_BLOCK_INTERVAL) {
+                        updatedTxFields.finalized = true;
+                    }
+                }
+            }
+            // TODO ?
+            // if (
+            //   tx.success !== updatedTxFields.success ||
+            //   tx.cancelled !== updatedTxFields.cancelled
+            // ) {
+            //   updatedTxFields.lastChanged = latestBlock.timestamp;
+            // }
+            updatedTxFields.lastCheck = latestBlock.timestamp;
+            try {
+                updateTransaction(address, chainId, updatedTxFields, true);
+            }
+            catch (e) {
+                console.error(e);
+            }
+        }
+        txChecking = false;
+    });
+}
 // /////////////////////////////////////////////////////////////////////////////////
 export default (config) => {
-    LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_PREVIOUS_WALLET_SLOT;
-    LOCAL_STORAGE_TRANSACTIONS_SLOT = (config.localStoragePrefix || '') + LOCAL_STORAGE_TRANSACTIONS_SLOT;
-    config = Object.assign({}, (config || {}));
-    if (!config.options || config.options.length === 0) {
-        config.options = ['builtin'];
+    _config = {
+        builtin: {
+            autoProbe: config.builtin ? config.builtin.autoProbe : false,
+        },
+        flow: {
+            autoSelect: config.flow && config.flow.autoSelect ? true : false,
+            autoUnlock: config.flow && config.flow.autoUnlock ? true : false,
+        },
+        debug: config.debug || false,
+        chainConfigs: config.chainConfigs,
+        options: config.options || [],
+        autoSelectPrevious: config.autoSelectPrevious ? true : false,
+        localStoragePrefix: config.localStoragePrefix || '',
+        transactions: {
+            finality: (config.transactions && config.transactions.finality) || 12,
+            pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
+        },
+    };
+    if (!_config.options || _config.options.length === 0) {
+        _config.options = ['builtin'];
     }
-    config.builtin = config.builtin || { autoProbe: false };
-    config.flow = config.flow || { autoSelect: false, autoUnlock: false };
-    const { debug, chainConfigs, builtin } = config;
-    _config = config;
+    LOCAL_STORAGE_PREVIOUS_WALLET_SLOT = _config.localStoragePrefix + LOCAL_STORAGE_PREVIOUS_WALLET_SLOT;
+    LOCAL_STORAGE_TRANSACTIONS_SLOT = _config.localStoragePrefix + LOCAL_STORAGE_TRANSACTIONS_SLOT;
+    const { debug, chainConfigs, builtin } = _config;
     _chainConfigs = chainConfigs;
     if (debug && typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1279,7 +1456,7 @@ export default (config) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         window.$transactions = $transactions;
     }
-    _options = config.options;
+    _options = _config.options;
     set(walletStore, {
         state: 'Idle',
         options: _options.map((m) => {

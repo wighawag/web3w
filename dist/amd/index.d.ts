@@ -127,6 +127,7 @@ declare module "utils/ethers" {
         value?: BigNumberish;
     };
     export type TransactionSent = {
+        submissionBlockTime: number;
         hash: string;
         from: string;
         chainId: string;
@@ -302,11 +303,14 @@ declare module "index" {
     };
     type TransactionRecord = {
         hash: string;
+        submissionBlockTime: number;
         acknowledged: boolean;
         cancelled: boolean;
         cancelationAcknowledged: boolean;
+        nonce: number;
+        confirmations: number;
+        finalized: boolean;
         to?: string;
-        nonce?: number;
         gasLimit?: string;
         gasPrice?: string;
         data?: string;
@@ -316,7 +320,7 @@ declare module "index" {
         args?: unknown[];
         eventsABI?: EventsABI;
         metadata?: unknown;
-        lastCheckBlock?: number;
+        lastCheck?: number;
         blockHash?: string;
         success?: boolean;
     };
@@ -331,6 +335,10 @@ declare module "index" {
         options?: ModuleOptions;
         autoSelectPrevious?: boolean;
         localStoragePrefix?: string;
+        transactions?: {
+            finality?: number;
+            pollingPeriod?: number;
+        };
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
     function disconnect(config?: {
