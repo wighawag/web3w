@@ -1,6 +1,6 @@
 {
   "name": "web3w",
-  "version": "0.2.34",
+  "version": "0.2.35",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/amd/index.js",
   "module": "dist/esm/index.js",
@@ -23,9 +23,11 @@
   "peerDependencies": {
     "@ethersproject/bignumber": "^5.0.0",
     "@ethersproject/contracts": "^5.0.0",
-    "@ethersproject/providers": "^5.0.0"
+    "@ethersproject/providers": "^5.0.0",
+    "@ethersproject/abi": "^5.0.0"
   },
   "devDependencies": {
+    "@ethersproject/abi": "^5.0.7",
     "@ethersproject/bignumber": "^5.0.6",
     "@ethersproject/contracts": "^5.0.3",
     "@ethersproject/providers": "^5.0.6",

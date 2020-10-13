@@ -303,17 +303,22 @@ declare module "index" {
     type BuiltinConfig = {
         autoProbe: boolean;
     };
-    type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'unknown';
+    type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'mined';
+    type ParsedEvent = {
+        args: Record<string, unknown>;
+        name: string;
+        signature: string;
+    };
     type TransactionRecord = {
         hash: string;
         from: string;
         submissionBlockTime: number;
         acknowledged: boolean;
-        lastAcknowledgment?: TransactionStatus;
         status: TransactionStatus;
         nonce: number;
         confirmations: number;
         finalized: boolean;
+        lastAcknowledgment?: TransactionStatus;
         to?: string;
         gasLimit?: string;
         gasPrice?: string;
@@ -327,7 +332,7 @@ declare module "index" {
         lastCheck?: number;
         blockHash?: string;
         blockNumber?: number;
-        events?: any[];
+        events?: ParsedEvent[];
     };
     export type Web3wConfig = {
         builtin?: BuiltinConfig;

@@ -138,17 +138,22 @@ export declare type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: 
 declare type BuiltinConfig = {
     autoProbe: boolean;
 };
-declare type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'unknown';
+declare type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'mined';
+declare type ParsedEvent = {
+    args: Record<string, unknown>;
+    name: string;
+    signature: string;
+};
 declare type TransactionRecord = {
     hash: string;
     from: string;
     submissionBlockTime: number;
     acknowledged: boolean;
-    lastAcknowledgment?: TransactionStatus;
     status: TransactionStatus;
     nonce: number;
     confirmations: number;
     finalized: boolean;
+    lastAcknowledgment?: TransactionStatus;
     to?: string;
     gasLimit?: string;
     gasPrice?: string;
@@ -162,7 +167,7 @@ declare type TransactionRecord = {
     lastCheck?: number;
     blockHash?: string;
     blockNumber?: number;
-    events?: any[];
+    events?: ParsedEvent[];
 };
 export declare type Web3wConfig = {
     builtin?: BuiltinConfig;

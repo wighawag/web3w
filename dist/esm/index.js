@@ -9,9 +9,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 import { Contract } from '@ethersproject/contracts';
 import { Web3Provider } from '@ethersproject/providers';
+import { Interface } from '@ethersproject/abi';
 import { writable } from './utils/store';
 import { fetchEthereum, getVendor } from './utils/builtin';
-import { timeout } from './utils/index.js';
+import { timeout } from './utils';
 import { proxyContract, proxyWeb3Provider, } from './utils/ethers';
 import { logs } from 'named-logs';
 import { CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET } from './errors';
@@ -406,8 +407,6 @@ const _observers = {
                 hash,
                 from,
                 acknowledged: false,
-                cancelled: false,
-                cancelationAcknowledged: false,
                 contractName,
                 method,
                 args,
@@ -1407,8 +1406,38 @@ function listenForTxReceipts(address, chainId) {
                     }
                 }
                 else {
-                    updatedTxFields.status = 'unknown'; // TODO check?
-                    // TODO could check if event exists
+                    if (receipt.logs.length > 0) {
+                        updatedTxFields.status = 'success';
+                    }
+                    else {
+                        updatedTxFields.status = 'mined'; // TODO check?
+                    }
+                }
+                if (tx.eventsABI && receipt.logs.length > 0) {
+                    const eventInterface = new Interface(tx.eventsABI);
+                    updatedTxFields.events = receipt.logs.reduce((filtered, log) => {
+                        let parsed;
+                        try {
+                            parsed = eventInterface.parseLog(log);
+                        }
+                        catch (e) {
+                            logger.error(e);
+                        }
+                        if (parsed) {
+                            const args = {};
+                            for (const key of Object.keys(parsed.args)) {
+                                const value = parsed.args[key];
+                                args[key] = JSON.parse(JSON.stringify(value));
+                            }
+                            const event = {
+                                args,
+                                name: parsed.name,
+                                signature: parsed.signature,
+                            };
+                            filtered.push(event);
+                        }
+                        return filtered;
+                    }, []);
                 }
                 updatedTxFields.blockHash = receipt.blockHash;
                 updatedTxFields.confirmations = receipt.confirmations;
@@ -1467,7 +1496,9 @@ export default (config) => {
         autoSelectPrevious: config.autoSelectPrevious ? true : false,
         localStoragePrefix: config.localStoragePrefix || '',
         transactions: {
-            autoDelete: true,
+            autoDelete: config.transactions && typeof config.transactions.autoDelete !== 'undefined'
+                ? config.transactions.autoDelete
+                : true,
             finality: (config.transactions && config.transactions.finality) || 12,
             pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
         },
