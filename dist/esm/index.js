@@ -1321,9 +1321,9 @@ function listenForTxReceipts(address, chainId) {
                 break;
             }
             let stableNonce = 0;
-            if (latestBlock.number > STABLE_BLOCK_INTERVAL) {
+            if (latestBlock.number >= STABLE_BLOCK_INTERVAL) {
                 try {
-                    stableNonce = yield _ethersProvider.getTransactionCount(address, latestBlock.number - STABLE_BLOCK_INTERVAL);
+                    stableNonce = yield _ethersProvider.getTransactionCount(address, latestBlock.number - Math.max(1, STABLE_BLOCK_INTERVAL) + 1);
                 }
                 catch (e) {
                     logger.error(e);
@@ -1381,20 +1381,22 @@ function listenForTxReceipts(address, chainId) {
                 if (stableNonce > tx.nonce) {
                     updatedTxFields.status = 'cancelled';
                     updatedTxFields.finalized = true;
+                    updatedTxFields.confirmations = Math.max(1, STABLE_BLOCK_INTERVAL);
                     if (tx.acknowledged || _config.transactions.autoDelete) {
                         deleteTx = true;
                     }
                 }
                 else if (currentNonce > tx.nonce) {
                     updatedTxFields.status = 'cancelled';
+                    updatedTxFields.confirmations = 1; // could be more
                 }
-                if (tx.blockHash) {
+                else {
                     updatedTxFields.status = 'pending';
-                    updatedTxFields.blockHash = undefined;
-                    updatedTxFields.blockNumber = undefined;
                     updatedTxFields.confirmations = 0;
-                    updatedTxFields.events = undefined;
                 }
+                updatedTxFields.blockHash = undefined;
+                updatedTxFields.blockNumber = undefined;
+                updatedTxFields.events = undefined;
             }
             else {
                 if (receipt.status !== undefined) {
