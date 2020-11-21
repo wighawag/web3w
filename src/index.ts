@@ -996,7 +996,7 @@ async function select(type: string, moduleConfig?: any) {
 
   listenForConnection();
 
-  let accounts;
+  let accounts: string[];
   try {
     if (type === 'builtin' && $builtin.vendor === 'Metamask') {
       accounts = await timeout(2000, _ethersProvider.listAccounts(), {
@@ -1005,7 +1005,16 @@ async function select(type: string, moduleConfig?: any) {
     } else {
       // TODO timeout warning
       logger.log(`fetching accounts...`);
-      accounts = await _ethersProvider.listAccounts();
+      try {
+        accounts = await _ethersProvider.listAccounts();
+      } catch (e) {
+        if (e.code === 4001) {
+          // status-im throw such error if eth_requestAccounts was not called first
+          accounts = [];
+        } else {
+          throw e;
+        }
+      }
       logger.log(`accounts: ${accounts}`);
     }
   } catch (e) {
@@ -1239,6 +1248,7 @@ function unlock() {
 
 function flow_retry(): Promise<void> {
   logger.log('RETRYING...');
+  set(flowStore, {executionError: undefined});
   if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
     if (!$chain.contracts) {
       return Promise.reject('contracts not set');

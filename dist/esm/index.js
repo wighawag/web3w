@@ -762,7 +762,18 @@ function select(type, moduleConfig) {
             else {
                 // TODO timeout warning
                 logger.log(`fetching accounts...`);
-                accounts = yield _ethersProvider.listAccounts();
+                try {
+                    accounts = yield _ethersProvider.listAccounts();
+                }
+                catch (e) {
+                    if (e.code === 4001) {
+                        // status-im throw such error if eth_requestAccounts was not called first
+                        accounts = [];
+                    }
+                    else {
+                        throw e;
+                    }
+                }
                 logger.log(`accounts: ${accounts}`);
             }
         }
@@ -1002,6 +1013,7 @@ function unlock() {
 }
 function flow_retry() {
     logger.log('RETRYING...');
+    set(flowStore, { executionError: undefined });
     if ($chain.state === 'Ready' && $wallet.state === 'Ready') {
         if (!$chain.contracts) {
             return Promise.reject('contracts not set');
