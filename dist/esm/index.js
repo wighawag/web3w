@@ -766,7 +766,8 @@ function select(type, moduleConfig) {
                     accounts = yield _ethersProvider.listAccounts();
                 }
                 catch (e) {
-                    if (e.code === 4001) {
+                    if (e.code === 4100) {
+                        logger.log(`4100 ${e.name}`);
                         // status-im throw such error if eth_requestAccounts was not called first
                         accounts = [];
                     }
