@@ -1012,6 +1012,13 @@ async function select(type: string, moduleConfig?: any) {
           logger.log(`4100 ${e.name}`);
           // status-im throw such error if eth_requestAccounts was not called first
           accounts = [];
+        } else if (e.code === -32500 && e.message === 'permission denied') {
+          if ($builtin.vendor === 'Opera') {
+            logger.log(`permission denied (opera) crypto wallet not enabled?)`);
+          } else {
+            logger.log(`permission denied`);
+          }
+          accounts = [];
         } else {
           throw e;
         }
