@@ -1057,8 +1057,8 @@ function probeBuiltin() {
     return probing;
   }
   probing = new Promise(async (resolve, reject) => {
-    if ($builtin.state === 'Ready') {
-      return resolve();
+    if (_builtinWeb3Provider && $builtin.state === 'Ready') {
+      return resolve(_builtinWeb3Provider);
     }
     set(builtinStore, {probing: true});
     try {
@@ -1080,6 +1080,7 @@ function probeBuiltin() {
           probing: false,
         });
       }
+      resolve(ethereum);
     } catch (e) {
       set(builtinStore, {
         error: e.message || e,
@@ -1089,7 +1090,6 @@ function probeBuiltin() {
       });
       return reject(e);
     }
-    resolve(_builtinWeb3Provider);
   });
   return probing;
 }
