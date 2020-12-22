@@ -8,7 +8,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { Contract } from '@ethersproject/contracts';
-import { Web3Provider } from '@ethersproject/providers';
+import { Web3Provider, JsonRpcProvider } from '@ethersproject/providers';
 import { Interface } from '@ethersproject/abi';
 import { writable } from './utils/store';
 import { fetchEthereum, getVendor } from './utils/builtin';
@@ -34,6 +34,13 @@ const $balance = {
     blockNumber: undefined,
 };
 const $chain = {
+    state: 'Idle',
+    connecting: false,
+    loadingData: false,
+    contracts: undefined,
+    error: undefined,
+};
+const $fallback = {
     state: 'Idle',
     connecting: false,
     loadingData: false,
@@ -68,6 +75,7 @@ const walletStore = store($wallet);
 const transactionsStore = store($transactions);
 const builtinStore = store($builtin);
 const chainStore = store($chain);
+const fallbackStore = store($fallback);
 const balanceStore = store($balance);
 const flowStore = store($flow);
 let LOCAL_STORAGE_TRANSACTIONS_SLOT = '_web3w_transactions';
@@ -495,57 +503,57 @@ function setupChain(address, newProviderRequired) {
         yield loadChain(chainId, address, newProviderRequired);
     });
 }
+function getContractInfos(chainConfigs, chainId) {
+    if (chainConfigs.chainId) {
+        const chainConfig = chainConfigs;
+        if (chainId === chainConfig.chainId || chainId == toDecimal(chainConfig.chainId)) {
+            return chainConfig.contracts;
+        }
+        else {
+            const error = {
+                code: CHAIN_CONFIG_NOT_AVAILABLE,
+                message: `chainConfig only available for ${chainConfig.chainId}, not available for ${chainId}`,
+            };
+            throw error;
+        }
+    }
+    else {
+        const multichainConfigs = chainConfigs;
+        const chainConfig = multichainConfigs[chainId] || multichainConfigs[toHex(chainId)];
+        if (!chainConfig) {
+            const error = { code: CHAIN_CONFIG_NOT_AVAILABLE, message: `chainConfig not available for ${chainId}` };
+            throw error; // TODO remove ?
+        }
+        else {
+            return chainConfig.contracts;
+        }
+    }
+}
 function loadChain(chainId, address, newProviderRequired) {
     return __awaiter(this, void 0, void 0, function* () {
         const ethersProvider = ensureEthersProvider(newProviderRequired);
         set(chainStore, { loadingData: true });
         const contractsToAdd = {};
         const addresses = {};
-        let contractsInfos = {};
         let chainConfigs = _chainConfigs;
         if (typeof chainConfigs === 'function') {
             chainConfigs = yield chainConfigs(chainId);
         }
         if (chainConfigs) {
-            if (chainConfigs.chainId) {
-                const chainConfig = chainConfigs;
-                if (chainId === chainConfig.chainId || chainId == toDecimal(chainConfig.chainId)) {
-                    contractsInfos = chainConfig.contracts;
-                }
-                else {
-                    const error = {
-                        code: CHAIN_CONFIG_NOT_AVAILABLE,
-                        message: `chainConfig only available for ${chainConfig.chainId} , not available for ${chainId}`,
-                    };
-                    set(chainStore, {
-                        error,
-                        chainId,
-                        notSupported: true,
-                        connecting: false,
-                        loadingData: false,
-                        state: 'Connected',
-                    });
-                    throw new Error(error.message); // TODO remove ?
-                }
+            let contractsInfos;
+            try {
+                contractsInfos = getContractInfos(chainConfigs, chainId);
             }
-            else {
-                const multichainConfigs = chainConfigs;
-                const chainConfig = multichainConfigs[chainId] || multichainConfigs[toHex(chainId)];
-                if (!chainConfig) {
-                    const error = { code: CHAIN_CONFIG_NOT_AVAILABLE, message: `chainConfig not available for ${chainId}` };
-                    set(chainStore, {
-                        error,
-                        chainId,
-                        notSupported: true,
-                        connecting: false,
-                        loadingData: false,
-                        state: 'Connected',
-                    });
-                    throw new Error(error.message); // TODO remove ?
-                }
-                else {
-                    contractsInfos = chainConfig.contracts;
-                }
+            catch (error) {
+                set(chainStore, {
+                    error,
+                    chainId,
+                    notSupported: true,
+                    connecting: false,
+                    loadingData: false,
+                    state: 'Connected',
+                });
+                throw new Error(error.message || error);
             }
             for (const contractName of Object.keys(contractsInfos)) {
                 const contractInfo = contractsInfos[contractName];
@@ -820,8 +828,8 @@ function probeBuiltin() {
         return probing;
     }
     probing = new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
-        if ($builtin.state === 'Ready') {
-            return resolve();
+        if (_builtinWeb3Provider && $builtin.state === 'Ready') {
+            return resolve(_builtinWeb3Provider);
         }
         set(builtinStore, { probing: true });
         try {
@@ -844,6 +852,7 @@ function probeBuiltin() {
                     probing: false,
                 });
             }
+            resolve(ethereum);
         }
         catch (e) {
             set(builtinStore, {
@@ -854,7 +863,6 @@ function probeBuiltin() {
             });
             return reject(e);
         }
-        resolve(_builtinWeb3Provider);
     }));
     return probing;
 }
@@ -1504,6 +1512,77 @@ function deleteTransaction(hash) {
         transactionsStore.set($transactions);
     }
 }
+function setupFallback(fallbackNode, chainConfigs) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const jsonProvider = new JsonRpcProvider(fallbackNode);
+        set(fallbackStore, { connecting: true });
+        let chainIdAsNumber;
+        try {
+            const netResult = yield jsonProvider.getNetwork();
+            chainIdAsNumber = netResult.chainId;
+        }
+        catch (e) {
+            const error = {
+                code: CHAIN_ID_FAILED,
+                message: `Failed to fetch chainId`,
+            };
+            set(fallbackStore, {
+                error,
+                connecting: false,
+                loadingData: false,
+                contracts: undefined,
+                addresses: undefined,
+                state: 'Idle',
+            });
+            throw new Error(error.message);
+        }
+        const chainId = String(chainIdAsNumber);
+        set(fallbackStore, {
+            chainId,
+            connecting: false,
+            loadingData: false,
+            contracts: undefined,
+            addresses: undefined,
+            state: 'Connected',
+        });
+        set(fallbackStore, { loadingData: true });
+        if (typeof chainConfigs === 'function') {
+            chainConfigs = yield chainConfigs(chainId);
+        }
+        const contractsToAdd = {};
+        const addresses = {};
+        let contractsInfos;
+        try {
+            contractsInfos = getContractInfos(chainConfigs, chainId);
+        }
+        catch (error) {
+            set(fallbackStore, {
+                error,
+                chainId,
+                connecting: false,
+                loadingData: false,
+                state: 'Connected',
+            });
+            throw new Error(error.message || error);
+        }
+        for (const contractName of Object.keys(contractsInfos)) {
+            const contractInfo = contractsInfos[contractName];
+            if (contractInfo.abi) {
+                logger.log({ contractName });
+                contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, jsonProvider);
+            }
+            addresses[contractName] = contractInfo.address;
+        }
+        set(fallbackStore, {
+            state: 'Ready',
+            loadingData: false,
+            connecting: false,
+            chainId,
+            addresses,
+            contracts: contractsToAdd,
+        });
+    });
+}
 // /////////////////////////////////////////////////////////////////////////////////
 export default (config) => {
     _config = {
@@ -1534,6 +1613,9 @@ export default (config) => {
     LOCAL_STORAGE_TRANSACTIONS_SLOT = _config.localStoragePrefix + LOCAL_STORAGE_TRANSACTIONS_SLOT;
     const { debug, chainConfigs, builtin } = _config;
     _chainConfigs = chainConfigs;
+    if (config.fallbackNode) {
+        setupFallback(config.fallbackNode, chainConfigs);
+    }
     if (debug && typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         window.$wallet = $wallet;
@@ -1603,6 +1685,15 @@ export default (config) => {
         chain: {
             subscribe: chainStore.subscribe,
             acknowledgeError: acknowledgeError(chainStore),
+            get contracts() {
+                return $chain.contracts;
+            },
+        },
+        fallback: {
+            subscribe: fallbackStore.subscribe,
+            get contracts() {
+                return $fallback.contracts;
+            },
         },
         builtin: {
             subscribe: builtinStore.subscribe,

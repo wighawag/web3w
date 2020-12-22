@@ -38,6 +38,16 @@ export declare type ChainData = BaseData & {
     contracts?: Contracts;
     notSupported?: boolean;
 };
+export declare type FallbackData = BaseData & {
+    connecting: boolean;
+    loadingData: boolean;
+    state: 'Idle' | 'Connected' | 'Ready';
+    chainId?: string;
+    addresses?: {
+        [name: string]: string;
+    };
+    contracts?: Contracts;
+};
 export declare type FlowData = BaseData & {
     inProgress: boolean;
     executing: boolean;
@@ -79,6 +89,10 @@ export declare type BuiltinStore = Readable<BuiltinData> & {
 };
 export declare type ChainStore = Readable<ChainData> & {
     acknowledgeError: () => void;
+    readonly contracts: Contracts | undefined;
+};
+export declare type FallbackStore = Readable<FallbackData> & {
+    readonly contracts: Contracts | undefined;
 };
 export declare type BalanceStore = Readable<BalanceData> & {
     acknowledgeError: () => void;
@@ -185,6 +199,7 @@ export declare type Web3wConfig = {
         finality?: number;
         pollingPeriod?: number;
     };
+    fallbackNode?: string;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
 declare function disconnect(config?: {
@@ -198,6 +213,7 @@ declare const _default: (config: Web3wConfig) => {
     transactions: TransactionStore;
     balance: BalanceStore;
     chain: ChainStore;
+    fallback: FallbackStore;
     builtin: BuiltinStore;
     wallet: WalletStore;
     flow: FlowStore;

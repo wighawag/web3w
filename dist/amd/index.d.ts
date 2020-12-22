@@ -203,6 +203,16 @@ declare module "index" {
         contracts?: Contracts;
         notSupported?: boolean;
     };
+    export type FallbackData = BaseData & {
+        connecting: boolean;
+        loadingData: boolean;
+        state: 'Idle' | 'Connected' | 'Ready';
+        chainId?: string;
+        addresses?: {
+            [name: string]: string;
+        };
+        contracts?: Contracts;
+    };
     export type FlowData = BaseData & {
         inProgress: boolean;
         executing: boolean;
@@ -244,6 +254,10 @@ declare module "index" {
     };
     export type ChainStore = Readable<ChainData> & {
         acknowledgeError: () => void;
+        readonly contracts: Contracts | undefined;
+    };
+    export type FallbackStore = Readable<FallbackData> & {
+        readonly contracts: Contracts | undefined;
     };
     export type BalanceStore = Readable<BalanceData> & {
         acknowledgeError: () => void;
@@ -350,6 +364,7 @@ declare module "index" {
             finality?: number;
             pollingPeriod?: number;
         };
+        fallbackNode?: string;
     };
     function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
     function disconnect(config?: {
@@ -363,6 +378,7 @@ declare module "index" {
         transactions: TransactionStore;
         balance: BalanceStore;
         chain: ChainStore;
+        fallback: FallbackStore;
         builtin: BuiltinStore;
         wallet: WalletStore;
         flow: FlowStore;
