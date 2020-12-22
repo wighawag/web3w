@@ -93,6 +93,7 @@ export declare type ChainStore = Readable<ChainData> & {
 };
 export declare type FallbackStore = Readable<FallbackData> & {
     readonly contracts: Contracts | undefined;
+    readonly state: 'Idle' | 'Connected' | 'Ready';
 };
 export declare type BalanceStore = Readable<BalanceData> & {
     acknowledgeError: () => void;

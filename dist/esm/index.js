@@ -1694,6 +1694,9 @@ export default (config) => {
             get contracts() {
                 return $fallback.contracts;
             },
+            get state() {
+                return $fallback.state;
+            },
         },
         builtin: {
             subscribe: builtinStore.subscribe,

@@ -115,6 +115,7 @@ export type ChainStore = Readable<ChainData> & {
 };
 export type FallbackStore = Readable<FallbackData> & {
   readonly contracts: Contracts | undefined;
+  readonly state: 'Idle' | 'Connected' | 'Ready';
 };
 export type BalanceStore = Readable<BalanceData> & {
   acknowledgeError: () => void;
@@ -1975,6 +1976,9 @@ export default (
       subscribe: fallbackStore.subscribe,
       get contracts() {
         return $fallback.contracts;
+      },
+      get state() {
+        return $fallback.state;
       },
     },
     builtin: {

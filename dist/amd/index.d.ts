@@ -258,6 +258,7 @@ declare module "index" {
     };
     export type FallbackStore = Readable<FallbackData> & {
         readonly contracts: Contracts | undefined;
+        readonly state: 'Idle' | 'Connected' | 'Ready';
     };
     export type BalanceStore = Readable<BalanceData> & {
         acknowledgeError: () => void;
