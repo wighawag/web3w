@@ -19,6 +19,7 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
         onContractTxSent: noop,
     };
     const { onContractTxRequested, onContractTxCancelled, onContractTxSent } = actualObservers;
+    const functionProxies = {};
     const proxies = {};
     const eventsABI = contractToProxy.interface.fragments
         .filter((fragment) => fragment.type === 'event')
@@ -40,8 +41,8 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
     }
     // TODO remove:
     // contract._original = contractToProxy;
-    function proxyCall(functions, methodName) {
-        let callProxy = proxies[methodName];
+    function proxyCall(proxiesDict, functions, methodName) {
+        let callProxy = proxiesDict[methodName];
         if (!callProxy) {
             let methodInterface = contractToProxy.interface.functions[methodName];
             if (!methodInterface) {
@@ -111,13 +112,13 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                     return tx;
                 }),
             });
-            proxies[methodName] = callProxy;
+            proxiesDict[methodName] = callProxy;
         }
         return callProxy;
     }
     const functionsProxy = new Proxy(contract.functions, {
         get: (functions, methodName) => {
-            return proxyCall(contractToProxy.functions, methodName); // TODO empty
+            return proxyCall(functionProxies, contractToProxy.functions, methodName); // TODO empty
         },
     });
     return new Proxy(contract, {
@@ -127,7 +128,7 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                 return functionsProxy;
             }
             else if (contractToProxy.functions[prop]) {
-                return proxyCall(contractToProxy.functions, prop);
+                return proxyCall(proxies, contractToProxy, prop);
             }
             else if (prop === '_proxiedContract') {
                 return contractToProxy;
