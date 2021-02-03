@@ -1792,7 +1792,7 @@ async function setupFallback(fallbackNode: string, chainConfigs: ChainConfigs) {
   } catch (e) {
     const error = {
       code: CHAIN_ID_FAILED,
-      message: `Failed to fetch chainId`, // TODO retry automatically ?
+      message: `Failed to fetch chainId from fallback`, // TODO retry automatically ?
     };
     set(fallbackStore, {
       error,

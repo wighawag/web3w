@@ -1528,7 +1528,7 @@ function setupFallback(fallbackNode, chainConfigs) {
         catch (e) {
             const error = {
                 code: CHAIN_ID_FAILED,
-                message: `Failed to fetch chainId`,
+                message: `Failed to fetch chainId from fallback`,
             };
             set(fallbackStore, {
                 error,
