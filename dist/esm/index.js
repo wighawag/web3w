@@ -454,6 +454,10 @@ function setupChain(address, newProviderRequired) {
             try {
                 const netResult = yield ethersProvider.getNetwork();
                 chainIdAsNumber = netResult.chainId;
+                if (chainIdAsNumber === 0) {
+                    chainIdAsNumber = 1337;
+                    logger.error('giving chainId = 0, assume local 1337?');
+                }
             }
             catch (e) {
                 const error = {

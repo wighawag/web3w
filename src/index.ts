@@ -713,6 +713,10 @@ async function setupChain(address: string, newProviderRequired: boolean) {
     try {
       const netResult = await ethersProvider.getNetwork();
       chainIdAsNumber = netResult.chainId;
+      if (chainIdAsNumber === 0) {
+        chainIdAsNumber = 1337;
+        logger.error('giving chainId = 0, assume local 1337?');
+      }
     } catch (e) {
       const error = {
         code: CHAIN_ID_FAILED,
