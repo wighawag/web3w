@@ -1228,10 +1228,11 @@ function addTransaction(from, chainId, tx) {
     addOrChangeTransaction(from, chainId, tx, true);
 }
 function updateTransaction(from, chainId, tx, override) {
-    const found = $transactions.find((v) => v.hash === tx.hash);
-    if (!found) {
-        throw new Error('cannot update non-existing Transaction record');
-    }
+    // TODO check ? used to do but if so, need to check for tx coming from another wallet, like it is done in `addOrChangeTransaction`
+    // const found = $transactions.find((v: TransactionRecord) => v.hash === tx.hash);
+    // if (!found) {
+    //   throw new Error('cannot update non-existing Transaction record');
+    // }
     addOrChangeTransaction(from, chainId, tx, override);
 }
 function addOrChangeTransaction(from, chainId, tx, override) {
