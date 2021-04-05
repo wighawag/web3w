@@ -149,7 +149,7 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                 });
             }
             else {
-                return obj[prop]; // TODO prototype access ?
+                return contractToProxy[prop]; // TODO prototype access ?
             }
         },
     });

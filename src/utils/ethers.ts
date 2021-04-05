@@ -242,7 +242,7 @@ export function proxyContract(
           }),
         });
       } else {
-        return obj[prop]; // TODO prototype access ?
+        return contractToProxy[prop]; // TODO prototype access ?
       }
     },
   });

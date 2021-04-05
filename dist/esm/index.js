@@ -1517,13 +1517,15 @@ function deleteTransaction(hash) {
         transactionsStore.set($transactions);
     }
 }
-function setupFallback(fallbackNode, chainConfigs) {
+function setupFallback(fallbackNodeOrProvider, chainConfigs) {
     return __awaiter(this, void 0, void 0, function* () {
-        const jsonProvider = new JsonRpcProvider(fallbackNode);
+        if (typeof fallbackNodeOrProvider === 'string') {
+            fallbackNodeOrProvider = new JsonRpcProvider(fallbackNodeOrProvider);
+        }
         set(fallbackStore, { connecting: true });
         let chainIdAsNumber;
         try {
-            const netResult = yield jsonProvider.getNetwork();
+            const netResult = yield fallbackNodeOrProvider.getNetwork();
             chainIdAsNumber = netResult.chainId;
         }
         catch (e) {
@@ -1539,7 +1541,8 @@ function setupFallback(fallbackNode, chainConfigs) {
                 addresses: undefined,
                 state: 'Idle',
             });
-            throw new Error(error.message);
+            // throw new Error(error.message);
+            return;
         }
         const chainId = String(chainIdAsNumber);
         set(fallbackStore, {
@@ -1574,7 +1577,7 @@ function setupFallback(fallbackNode, chainConfigs) {
             const contractInfo = contractsInfos[contractName];
             if (contractInfo.abi) {
                 logger.log({ contractName });
-                contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, jsonProvider);
+                contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
             }
             addresses[contractName] = contractInfo.address;
         }

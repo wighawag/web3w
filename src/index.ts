@@ -1,5 +1,5 @@
 import {Contract} from '@ethersproject/contracts';
-import {Web3Provider, JsonRpcProvider, ExternalProvider} from '@ethersproject/providers';
+import {Web3Provider, JsonRpcProvider, ExternalProvider, Provider} from '@ethersproject/providers';
 import {Interface, LogDescription} from '@ethersproject/abi';
 import {BigNumber} from '@ethersproject/bignumber';
 import {writable} from './utils/store';
@@ -221,7 +221,7 @@ export type Web3wConfig = {
     finality?: number;
     pollingPeriod?: number;
   };
-  fallbackNode?: string;
+  fallbackNode?: string | Provider;
 };
 
 type ResolvedWeb3WConfig = {
@@ -1783,12 +1783,14 @@ function deleteTransaction(hash: string) {
   }
 }
 
-async function setupFallback(fallbackNode: string, chainConfigs: ChainConfigs) {
-  const jsonProvider = new JsonRpcProvider(fallbackNode);
+async function setupFallback(fallbackNodeOrProvider: string | Provider, chainConfigs: ChainConfigs) {
+  if (typeof fallbackNodeOrProvider === 'string') {
+    fallbackNodeOrProvider = new JsonRpcProvider(fallbackNodeOrProvider);
+  }
   set(fallbackStore, {connecting: true});
   let chainIdAsNumber;
   try {
-    const netResult = await jsonProvider.getNetwork();
+    const netResult = await fallbackNodeOrProvider.getNetwork();
     chainIdAsNumber = netResult.chainId;
   } catch (e) {
     const error = {
@@ -1803,7 +1805,8 @@ async function setupFallback(fallbackNode: string, chainConfigs: ChainConfigs) {
       addresses: undefined,
       state: 'Idle',
     });
-    throw new Error(error.message);
+    // throw new Error(error.message);
+    return;
   }
   const chainId = String(chainIdAsNumber);
   set(fallbackStore, {
@@ -1838,7 +1841,7 @@ async function setupFallback(fallbackNode: string, chainConfigs: ChainConfigs) {
     const contractInfo = contractsInfos[contractName];
     if (contractInfo.abi) {
       logger.log({contractName});
-      contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, jsonProvider);
+      contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
     }
     addresses[contractName] = contractInfo.address;
   }

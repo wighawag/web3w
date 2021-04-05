@@ -1,5 +1,5 @@
 import { Contract } from '@ethersproject/contracts';
-import { JsonRpcProvider, ExternalProvider } from '@ethersproject/providers';
+import { JsonRpcProvider, ExternalProvider, Provider } from '@ethersproject/providers';
 import { BigNumber } from '@ethersproject/bignumber';
 import type { EventsABI } from './utils/ethers';
 import { Readable } from './utils/internals';
@@ -200,7 +200,7 @@ export declare type Web3wConfig = {
         finality?: number;
         pollingPeriod?: number;
     };
-    fallbackNode?: string;
+    fallbackNode?: string | Provider;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
 declare function disconnect(config?: {
