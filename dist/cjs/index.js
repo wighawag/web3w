@@ -1,3 +1,4 @@
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -7,16 +8,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import { Contract } from '@ethersproject/contracts';
-import { Web3Provider, JsonRpcProvider } from '@ethersproject/providers';
-import { Interface } from '@ethersproject/abi';
-import { writable } from './utils/store';
-import { fetchEthereum, getVendor } from './utils/builtin';
-import { timeout } from './utils';
-import { proxyContract, proxyWeb3Provider, } from './utils/ethers';
-import { logs } from 'named-logs';
-import { CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET } from './errors';
-const logger = logs('web3w:index');
+Object.defineProperty(exports, "__esModule", { value: true });
+const contracts_1 = require("@ethersproject/contracts");
+const providers_1 = require("@ethersproject/providers");
+const abi_1 = require("@ethersproject/abi");
+const store_1 = require("./utils/store");
+const builtin_1 = require("./utils/builtin");
+const utils_1 = require("./utils");
+const ethers_1 = require("./utils/ethers");
+const named_logs_1 = require("named-logs");
+const errors_1 = require("./errors");
+const logger = named_logs_1.logs('web3w:index');
 const isBrowser = typeof window != 'undefined';
 const $builtin = {
     state: 'Idle',
@@ -66,7 +68,7 @@ const $flow = {
     error: undefined,
 };
 function store(data) {
-    const result = writable(data);
+    const result = store_1.writable(data);
     result.data = data;
     return result;
 }
@@ -461,7 +463,7 @@ function setupChain(address, newProviderRequired) {
             }
             catch (e) {
                 const error = {
-                    code: CHAIN_ID_FAILED,
+                    code: errors_1.CHAIN_ID_FAILED,
                     message: `Failed to fetch chainId`,
                 };
                 set(chainStore, {
@@ -489,7 +491,7 @@ function setupChain(address, newProviderRequired) {
         }
         if (!chainId) {
             const error = {
-                code: CHAIN_ID_NOT_SET,
+                code: errors_1.CHAIN_ID_NOT_SET,
                 message: `chainId is not set even though chain is connected`,
             };
             set(chainStore, {
@@ -515,7 +517,7 @@ function getContractInfos(chainConfigs, chainId) {
         }
         else {
             const error = {
-                code: CHAIN_CONFIG_NOT_AVAILABLE,
+                code: errors_1.CHAIN_CONFIG_NOT_AVAILABLE,
                 message: `chainConfig only available for ${chainConfig.chainId}, not available for ${chainId}`,
             };
             throw error;
@@ -525,7 +527,7 @@ function getContractInfos(chainConfigs, chainId) {
         const multichainConfigs = chainConfigs;
         const chainConfig = multichainConfigs[chainId] || multichainConfigs[toHex(chainId)];
         if (!chainConfig) {
-            const error = { code: CHAIN_CONFIG_NOT_AVAILABLE, message: `chainConfig not available for ${chainId}` };
+            const error = { code: errors_1.CHAIN_CONFIG_NOT_AVAILABLE, message: `chainConfig not available for ${chainId}` };
             throw error; // TODO remove ?
         }
         else {
@@ -563,7 +565,7 @@ function loadChain(chainId, address, newProviderRequired) {
                 const contractInfo = contractsInfos[contractName];
                 if (contractInfo.abi) {
                     logger.log({ contractName });
-                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)), contractName, chainId, _observers);
+                    contractsToAdd[contractName] = ethers_1.proxyContract(new contracts_1.Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)), contractName, chainId, _observers);
                 }
                 addresses[contractName] = contractInfo.address;
             }
@@ -628,7 +630,7 @@ function loadChain(chainId, address, newProviderRequired) {
 function ensureEthersProvider(newProviderRequired) {
     if (_ethersProvider === undefined || _web3Provider === undefined) {
         const error = {
-            code: CHAIN_NO_PROVIDER,
+            code: errors_1.CHAIN_NO_PROVIDER,
             message: `no provider setup yet`,
         };
         set(chainStore, {
@@ -643,7 +645,7 @@ function ensureEthersProvider(newProviderRequired) {
     }
     else {
         if (newProviderRequired) {
-            _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
+            _ethersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(_web3Provider), _observers);
         }
     }
     return _ethersProvider;
@@ -696,7 +698,7 @@ function select(type, moduleConfig) {
             _currentModule = undefined;
             const builtinWeb3Provider = yield probeBuiltin(); // TODO try catch ?
             _web3Provider = builtinWeb3Provider;
-            _ethersProvider = proxyWeb3Provider(new Web3Provider(builtinWeb3Provider), _observers);
+            _ethersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(builtinWeb3Provider), _observers);
         }
         else {
             let module;
@@ -736,7 +738,7 @@ function select(type, moduleConfig) {
                 const { web3Provider } = yield module.setup(moduleConfig); // TODO pass config in select to choose network
                 logger.log(`module setup`);
                 _web3Provider = web3Provider;
-                _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
+                _ethersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(_web3Provider), _observers);
                 _currentModule = module;
             }
             catch (e) {
@@ -745,7 +747,7 @@ function select(type, moduleConfig) {
                 }
                 else {
                     set(walletStore, {
-                        error: { code: MODULE_ERROR, message: e.message },
+                        error: { code: errors_1.MODULE_ERROR, message: e.message },
                         selected: undefined,
                         connecting: false,
                         loadingModule: false,
@@ -767,7 +769,7 @@ function select(type, moduleConfig) {
         let accounts;
         try {
             if (type === 'builtin' && $builtin.vendor === 'Metamask') {
-                accounts = yield timeout(2000, _ethersProvider.listAccounts(), {
+                accounts = yield utils_1.timeout(2000, _ethersProvider.listAccounts(), {
                     error: `Metamask timed out. Please reload the page (see <a href="https://github.com/MetaMask/metamask-extension/issues/7221">here</a>)`,
                 }); // TODO timeout checks (metamask, portis)
             }
@@ -837,13 +839,13 @@ function probeBuiltin() {
         }
         set(builtinStore, { probing: true });
         try {
-            const ethereum = yield fetchEthereum();
+            const ethereum = yield builtin_1.fetchEthereum();
             if (ethereum) {
                 ethereum.autoRefreshOnNetworkChange = false;
                 _builtinWeb3Provider = ethereum;
                 set(builtinStore, {
                     state: 'Ready',
-                    vendor: getVendor(ethereum),
+                    vendor: builtin_1.getVendor(ethereum),
                     available: true,
                     probing: false,
                 });
@@ -1451,7 +1453,7 @@ function listenForTxReceipts(address, chainId) {
                     }
                 }
                 if (tx.eventsABI && receipt.logs.length > 0) {
-                    const eventInterface = new Interface(tx.eventsABI);
+                    const eventInterface = new abi_1.Interface(tx.eventsABI);
                     updatedTxFields.events = receipt.logs.reduce((filtered, log) => {
                         let parsed;
                         try {
@@ -1520,7 +1522,7 @@ function deleteTransaction(hash) {
 function setupFallback(fallbackNodeOrProvider, chainConfigs) {
     return __awaiter(this, void 0, void 0, function* () {
         if (typeof fallbackNodeOrProvider === 'string') {
-            fallbackNodeOrProvider = new JsonRpcProvider(fallbackNodeOrProvider);
+            fallbackNodeOrProvider = new providers_1.JsonRpcProvider(fallbackNodeOrProvider);
         }
         set(fallbackStore, { connecting: true });
         let chainIdAsNumber;
@@ -1530,7 +1532,7 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
         }
         catch (e) {
             const error = {
-                code: CHAIN_ID_FAILED,
+                code: errors_1.CHAIN_ID_FAILED,
                 message: `Failed to fetch chainId from fallback`, // TODO retry automatically ?
             };
             set(fallbackStore, {
@@ -1577,7 +1579,7 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
             const contractInfo = contractsInfos[contractName];
             if (contractInfo.abi) {
                 logger.log({ contractName });
-                contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
+                contractsToAdd[contractName] = new contracts_1.Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
             }
             addresses[contractName] = contractInfo.address;
         }
@@ -1592,7 +1594,7 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
     });
 }
 // /////////////////////////////////////////////////////////////////////////////////
-export default (config) => {
+exports.default = (config) => {
     _config = {
         builtin: {
             autoProbe: config.builtin ? config.builtin.autoProbe : false,
