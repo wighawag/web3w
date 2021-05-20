@@ -1386,10 +1386,10 @@ ms@2.1.2:
   resolved "https://registry.yarnpkg.com/ms/-/ms-2.1.2.tgz#d09d1f357b443f493382a8eb3ccd183872ae6009"
   integrity sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==
 
-named-logs@0.0.13:
-  version "0.0.13"
-  resolved "https://registry.yarnpkg.com/named-logs/-/named-logs-0.0.13.tgz#7c2c9c8afad4034aa70ada2e1acbbd33a9f49e70"
-  integrity sha512-I5cX7HbnLpQW8VsNu3dAh6g631I1cRsdlN8y/j/NQ4yyKA0Iecp4FZ5a2AYNQbzohMwLTDXW+EW6eeH6wAppSA==
+named-logs@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/named-logs/-/named-logs-0.1.0.tgz#9e2aad18ea13edaa2804fd45865880d6651cff40"
+  integrity sha512-BH/I7iUfuL+FR9QmNUT1wUK/JC53qUogrCEv3XGVCHrlQ9hqRrLNakfE5BQbjXPC2A6Kb0whw9BkU+A7nhYKOg==
 
 natural-compare@^1.4.0:
   version "1.4.0"
