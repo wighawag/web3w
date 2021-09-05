@@ -1,4 +1,4 @@
-# web3w, a Library to handle web3 wallets using obsvervable states
+# web3w, a Library to handle web3 wallets using observable states
 
 ## install and setup
 
