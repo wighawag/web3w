@@ -1,5 +1,5 @@
 import {Contract} from '@ethersproject/contracts';
-import {Web3Provider, JsonRpcProvider, ExternalProvider, Provider} from '@ethersproject/providers';
+import {Web3Provider, JsonRpcProvider, ExternalProvider, Provider, TransactionReceipt} from '@ethersproject/providers';
 import {Interface, LogDescription} from '@ethersproject/abi';
 import {BigNumber} from '@ethersproject/bignumber';
 import {writable} from './utils/store';
@@ -212,7 +212,7 @@ export type Web3wConfig = {
   builtin?: BuiltinConfig;
   flow?: {autoSelect?: boolean; autoUnlock?: boolean};
   debug?: boolean;
-  chainConfigs: ChainConfigs;
+  chainConfigs?: ChainConfigs;
   options?: ModuleOptions;
   autoSelectPrevious?: boolean;
   localStoragePrefix?: string;
@@ -228,7 +228,7 @@ type ResolvedWeb3WConfig = {
   builtin: BuiltinConfig;
   flow: {autoSelect: boolean; autoUnlock: boolean};
   debug: boolean;
-  chainConfigs: ChainConfigs;
+  chainConfigs?: ChainConfigs;
   options: ModuleOptions;
   autoSelectPrevious: boolean;
   localStoragePrefix: string;
@@ -362,7 +362,7 @@ let _listenning = false;
 let _ethersProvider: JsonRpcProvider | undefined;
 let _web3Provider: WindowWeb3Provider | undefined;
 let _builtinWeb3Provider: WindowWeb3Provider | undefined;
-let _chainConfigs: ChainConfigs;
+let _chainConfigs: ChainConfigs | undefined;
 let _currentModule: Web3WModule | undefined;
 let _options: ModuleOptions;
 let _config: ResolvedWeb3WConfig;
@@ -1661,7 +1661,7 @@ async function listenForTxReceipts(address: string, chainId: string) {
     if (!transactionManager) {
       break;
     }
-    let receipt;
+    let receipt: TransactionReceipt;
     try {
       receipt = await _ethersProvider.getTransactionReceipt(tx.hash);
     } catch (e) {
@@ -1783,7 +1783,7 @@ function deleteTransaction(hash: string) {
   }
 }
 
-async function setupFallback(fallbackNodeOrProvider: string | Provider, chainConfigs: ChainConfigs) {
+async function setupFallback(fallbackNodeOrProvider: string | Provider, chainConfigs?: ChainConfigs) {
   if (typeof fallbackNodeOrProvider === 'string') {
     fallbackNodeOrProvider = new JsonRpcProvider(fallbackNodeOrProvider);
   }
@@ -1823,28 +1823,31 @@ async function setupFallback(fallbackNodeOrProvider: string | Provider, chainCon
   }
   const contractsToAdd: {[name: string]: Contract} = {};
   const addresses: {[name: string]: string} = {};
-  let contractsInfos;
-  try {
-    contractsInfos = getContractInfos(chainConfigs, chainId);
-  } catch (error) {
-    set(fallbackStore, {
-      error,
-      chainId,
-      connecting: false,
-      loadingData: false,
-      state: 'Connected',
-    });
-    throw new Error(error.message || error);
+  if (chainConfigs) {
+    let contractsInfos;
+    try {
+      contractsInfos = getContractInfos(chainConfigs, chainId);
+    } catch (error) {
+      set(fallbackStore, {
+        error,
+        chainId,
+        connecting: false,
+        loadingData: false,
+        state: 'Connected',
+      });
+      throw new Error(error.message || error);
+    }
+
+    for (const contractName of Object.keys(contractsInfos)) {
+      const contractInfo = contractsInfos[contractName];
+      if (contractInfo.abi) {
+        logger.log({contractName});
+        contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
+      }
+      addresses[contractName] = contractInfo.address;
+    }
   }
 
-  for (const contractName of Object.keys(contractsInfos)) {
-    const contractInfo = contractsInfos[contractName];
-    if (contractInfo.abi) {
-      logger.log({contractName});
-      contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
-    }
-    addresses[contractName] = contractInfo.address;
-  }
   set(fallbackStore, {
     state: 'Ready',
     loadingData: false,
