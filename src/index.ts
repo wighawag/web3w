@@ -112,6 +112,7 @@ export type BuiltinStore = Readable<BuiltinData> & {
 export type ChainStore = Readable<ChainData> & {
   // TODO connect ?
   acknowledgeError: () => void;
+  acknowledgeNewGenesisHash: () => void;
   readonly contracts: Contracts | undefined;
 };
 export type FallbackStore = Readable<FallbackData> & {
@@ -375,18 +376,20 @@ let _flowResolve: ((val: Contracts) => void) | undefined;
 let _flowReject: ((err: ErrorData) => void) | undefined;
 let _call: ((contracts: Contracts) => Promise<void>) | undefined;
 
+const genesisHashes: {[chainId: string]: string} = {};
+
 async function checkGenesis(ethersProvider: JsonRpcProvider, chainId: string): Promise<boolean | undefined> {
   let networkChanged = undefined;
   if (typeof window !== 'undefined') {
     try {
       const lkey = `_genesis_${chainId}`;
       const genesisBlock = await ethersProvider.getBlock('earliest');
+      genesisHashes[chainId] = genesisBlock.hash;
       const lastHash = localStorage.getItem(lkey);
       if (lastHash !== genesisBlock.hash) {
         if (lastHash) {
           networkChanged = true;
         }
-        localStorage.setItem(lkey, genesisBlock.hash);
       } else {
         networkChanged = false;
       }
@@ -2015,6 +2018,20 @@ export default (
     chain: {
       subscribe: chainStore.subscribe,
       acknowledgeError: acknowledgeError(chainStore),
+      acknowledgeNewGenesisHash() {
+        const chainId = $chain.chainId;
+        if (chainId) {
+          if (genesisHashes[chainId]) {
+            const lkey = `_genesis_${chainId}`;
+            localStorage.setItem(lkey, genesisHashes[chainId]);
+            set(chainStore, {genesisChanged: false});
+          } else {
+            throw new Error(`no genesisHash for chainId: ${chainId}`);
+          }
+        } else {
+          throw new Error(`no chainId`);
+        }
+      },
       get contracts() {
         return $chain.contracts;
       },

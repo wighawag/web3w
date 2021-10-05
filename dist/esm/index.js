@@ -132,6 +132,7 @@ let _flowPromise;
 let _flowResolve;
 let _flowReject;
 let _call;
+const genesisHashes = {};
 function checkGenesis(ethersProvider, chainId) {
     return __awaiter(this, void 0, void 0, function* () {
         let networkChanged = undefined;
@@ -139,12 +140,12 @@ function checkGenesis(ethersProvider, chainId) {
             try {
                 const lkey = `_genesis_${chainId}`;
                 const genesisBlock = yield ethersProvider.getBlock('earliest');
+                genesisHashes[chainId] = genesisBlock.hash;
                 const lastHash = localStorage.getItem(lkey);
                 if (lastHash !== genesisBlock.hash) {
                     if (lastHash) {
                         networkChanged = true;
                     }
-                    localStorage.setItem(lkey, genesisBlock.hash);
                 }
                 else {
                     networkChanged = false;
@@ -1729,6 +1730,22 @@ export default (config) => {
         chain: {
             subscribe: chainStore.subscribe,
             acknowledgeError: acknowledgeError(chainStore),
+            acknowledgeNewGenesisHash() {
+                const chainId = $chain.chainId;
+                if (chainId) {
+                    if (genesisHashes[chainId]) {
+                        const lkey = `_genesis_${chainId}`;
+                        localStorage.setItem(lkey, genesisHashes[chainId]);
+                        set(chainStore, { genesisChanged: false });
+                    }
+                    else {
+                        throw new Error(`no genesisHash for chainId: ${chainId}`);
+                    }
+                }
+                else {
+                    throw new Error(`no chainId`);
+                }
+            },
             get contracts() {
                 return $chain.contracts;
             },

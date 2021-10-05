@@ -90,6 +90,7 @@ export declare type BuiltinStore = Readable<BuiltinData> & {
 };
 export declare type ChainStore = Readable<ChainData> & {
     acknowledgeError: () => void;
+    acknowledgeNewGenesisHash: () => void;
     readonly contracts: Contracts | undefined;
 };
 export declare type FallbackStore = Readable<FallbackData> & {
