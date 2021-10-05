@@ -53,6 +53,7 @@ export type ChainData = BaseData & {
   addresses?: {[name: string]: string};
   contracts?: Contracts;
   notSupported?: boolean;
+  genesisChanged?: boolean;
 };
 
 export type FallbackData = BaseData & {
@@ -222,6 +223,7 @@ export type Web3wConfig = {
     pollingPeriod?: number;
   };
   fallbackNode?: string | Provider;
+  checkGenesis?: boolean;
 };
 
 type ResolvedWeb3WConfig = {
@@ -237,6 +239,7 @@ type ResolvedWeb3WConfig = {
     finality: number;
     pollingPeriod: number;
   };
+  checkGenesis: boolean;
 };
 
 const isBrowser = typeof window != 'undefined';
@@ -371,6 +374,28 @@ let _flowPromise: Promise<Contracts> | undefined;
 let _flowResolve: ((val: Contracts) => void) | undefined;
 let _flowReject: ((err: ErrorData) => void) | undefined;
 let _call: ((contracts: Contracts) => Promise<void>) | undefined;
+
+async function checkGenesis(ethersProvider: JsonRpcProvider, chainId: string): Promise<boolean | undefined> {
+  let networkChanged = undefined;
+  if (typeof window !== 'undefined') {
+    try {
+      const lkey = `_genesis_${chainId}`;
+      const genesisBlock = await ethersProvider.getBlock('earliest');
+      const lastHash = localStorage.getItem(lkey);
+      if (lastHash !== genesisBlock.hash) {
+        if (lastHash) {
+          networkChanged = true;
+        }
+        localStorage.setItem(lkey, genesisBlock.hash);
+      } else {
+        networkChanged = false;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return networkChanged;
+}
 
 async function onChainChanged(chainId: string) {
   if (chainId === '0xNaN') {
@@ -794,6 +819,14 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
   const contractsToAdd: {[name: string]: Contract} = {};
   const addresses: {[name: string]: string} = {};
   let chainConfigs = _chainConfigs;
+
+  if (_config.checkGenesis) {
+    const genesisChanged = await checkGenesis(ethersProvider, chainId);
+    if ($chain.genesisChanged !== genesisChanged) {
+      set(chainStore, {genesisChanged});
+    }
+  }
+
   if (typeof chainConfigs === 'function') {
     chainConfigs = await chainConfigs(chainId);
   }
@@ -895,6 +928,7 @@ function ensureEthersProvider(newProviderRequired: boolean): JsonRpcProvider {
       contracts: undefined,
       addresses: undefined,
       state: 'Idle',
+      genesisChanged: undefined,
     });
     throw new Error(error.message);
   } else {
@@ -1174,6 +1208,7 @@ function _disconnect(keepFlow?: boolean) {
     notSupported: undefined,
     chainId: undefined,
     error: undefined,
+    genesisChanged: undefined,
   });
   if (!keepFlow) {
     set(flowStore, {
@@ -1891,6 +1926,7 @@ export default (
       finality: (config.transactions && config.transactions.finality) || 12,
       pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
     },
+    checkGenesis: config.checkGenesis || false,
   };
   if (!_config.options || _config.options.length === 0) {
     _config.options = ['builtin'];
