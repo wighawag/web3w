@@ -132,6 +132,31 @@ let _flowPromise;
 let _flowResolve;
 let _flowReject;
 let _call;
+function checkGenesis(ethersProvider, chainId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let networkChanged = undefined;
+        if (typeof window !== 'undefined') {
+            try {
+                const lkey = `_genesis_${chainId}`;
+                const genesisBlock = yield ethersProvider.getBlock('earliest');
+                const lastHash = localStorage.getItem(lkey);
+                if (lastHash !== genesisBlock.hash) {
+                    if (lastHash) {
+                        networkChanged = true;
+                    }
+                    localStorage.setItem(lkey, genesisBlock.hash);
+                }
+                else {
+                    networkChanged = false;
+                }
+            }
+            catch (_a) {
+                // ignore
+            }
+        }
+        return networkChanged;
+    });
+}
 function onChainChanged(chainId) {
     return __awaiter(this, void 0, void 0, function* () {
         if (chainId === '0xNaN') {
@@ -540,6 +565,12 @@ function loadChain(chainId, address, newProviderRequired) {
         const contractsToAdd = {};
         const addresses = {};
         let chainConfigs = _chainConfigs;
+        if (_config.checkGenesis) {
+            const genesisChanged = yield checkGenesis(ethersProvider, chainId);
+            if ($chain.genesisChanged !== genesisChanged) {
+                set(chainStore, { genesisChanged });
+            }
+        }
         if (typeof chainConfigs === 'function') {
             chainConfigs = yield chainConfigs(chainId);
         }
@@ -638,6 +669,7 @@ function ensureEthersProvider(newProviderRequired) {
             contracts: undefined,
             addresses: undefined,
             state: 'Idle',
+            genesisChanged: undefined,
         });
         throw new Error(error.message);
     }
@@ -920,6 +952,7 @@ function _disconnect(keepFlow) {
         notSupported: undefined,
         chainId: undefined,
         error: undefined,
+        genesisChanged: undefined,
     });
     if (!keepFlow) {
         set(flowStore, {
@@ -1559,27 +1592,29 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
         }
         const contractsToAdd = {};
         const addresses = {};
-        let contractsInfos;
-        try {
-            contractsInfos = getContractInfos(chainConfigs, chainId);
-        }
-        catch (error) {
-            set(fallbackStore, {
-                error,
-                chainId,
-                connecting: false,
-                loadingData: false,
-                state: 'Connected',
-            });
-            throw new Error(error.message || error);
-        }
-        for (const contractName of Object.keys(contractsInfos)) {
-            const contractInfo = contractsInfos[contractName];
-            if (contractInfo.abi) {
-                logger.log({ contractName });
-                contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
+        if (chainConfigs) {
+            let contractsInfos;
+            try {
+                contractsInfos = getContractInfos(chainConfigs, chainId);
             }
-            addresses[contractName] = contractInfo.address;
+            catch (error) {
+                set(fallbackStore, {
+                    error,
+                    chainId,
+                    connecting: false,
+                    loadingData: false,
+                    state: 'Connected',
+                });
+                throw new Error(error.message || error);
+            }
+            for (const contractName of Object.keys(contractsInfos)) {
+                const contractInfo = contractsInfos[contractName];
+                if (contractInfo.abi) {
+                    logger.log({ contractName });
+                    contractsToAdd[contractName] = new Contract(contractInfo.address, contractInfo.abi, fallbackNodeOrProvider);
+                }
+                addresses[contractName] = contractInfo.address;
+            }
         }
         set(fallbackStore, {
             state: 'Ready',
@@ -1613,6 +1648,7 @@ export default (config) => {
             finality: (config.transactions && config.transactions.finality) || 12,
             pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
         },
+        checkGenesis: config.checkGenesis || false,
     };
     if (!_config.options || _config.options.length === 0) {
         _config.options = ['builtin'];

@@ -37,6 +37,7 @@ export declare type ChainData = BaseData & {
     };
     contracts?: Contracts;
     notSupported?: boolean;
+    genesisChanged?: boolean;
 };
 export declare type FallbackData = BaseData & {
     connecting: boolean;
@@ -191,7 +192,7 @@ export declare type Web3wConfig = {
         autoUnlock?: boolean;
     };
     debug?: boolean;
-    chainConfigs: ChainConfigs;
+    chainConfigs?: ChainConfigs;
     options?: ModuleOptions;
     autoSelectPrevious?: boolean;
     localStoragePrefix?: string;
@@ -201,6 +202,7 @@ export declare type Web3wConfig = {
         pollingPeriod?: number;
     };
     fallbackNode?: string | Provider;
+    checkGenesis?: boolean;
 };
 declare function connect(type: string, moduleConfig?: unknown): Promise<boolean>;
 declare function disconnect(config?: {
