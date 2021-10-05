@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.3
+
+### Patch Changes
+
+- fix, save genesisHash at first
+
 ## 0.3.2-beta.2
 
 ### Patch Changes

@@ -148,6 +148,10 @@ function checkGenesis(ethersProvider, chainId) {
                     if (lastHash) {
                         networkChanged = true;
                     }
+                    else {
+                        networkChanged = false;
+                        localStorage.setItem(lkey, genesisBlock.hash);
+                    }
                 }
                 else {
                     networkChanged = false;
