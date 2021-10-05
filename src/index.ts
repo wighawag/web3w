@@ -389,6 +389,9 @@ async function checkGenesis(ethersProvider: JsonRpcProvider, chainId: string): P
       if (lastHash !== genesisBlock.hash) {
         if (lastHash) {
           networkChanged = true;
+        } else {
+          networkChanged = false;
+          localStorage.setItem(lkey, genesisBlock.hash);
         }
       } else {
         networkChanged = false;
