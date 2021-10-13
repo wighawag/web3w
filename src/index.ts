@@ -197,6 +197,8 @@ type TransactionRecord = {
   to?: string;
   gasLimit?: string;
   gasPrice?: string;
+  maxPriorityFeePerGas?: string;
+  maxFeePerGas?: string;
   data?: string;
   value?: string;
   contractName?: string;
@@ -638,6 +640,8 @@ const _observers = {
     gasLimit,
     nonce,
     gasPrice,
+    maxFeePerGas,
+    maxPriorityFeePerGas,
     data,
     value,
     chainId,
@@ -654,7 +658,9 @@ const _observers = {
         to,
         nonce,
         gasLimit: gasLimit.toString(),
-        gasPrice: gasPrice.toString(),
+        gasPrice: gasPrice?.toString(),
+        maxFeePerGas: maxFeePerGas?.toString(),
+        maxPriorityFeePerGas: maxPriorityFeePerGas?.toString(),
         data,
         value: value.toString(),
         submissionBlockTime,

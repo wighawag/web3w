@@ -393,7 +393,7 @@ const _observers = {
         logger.debug('onTxCancelled', { txRequest });
         cancelUserAttention('transaction');
     },
-    onTxSent: ({ hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to, submissionBlockTime, }) => {
+    onTxSent: ({ hash, from, gasLimit, nonce, gasPrice, maxFeePerGas, maxPriorityFeePerGas, data, value, chainId, to, submissionBlockTime, }) => {
         logger.debug('onTxSent', { hash, from, gasLimit, nonce, gasPrice, data, value, chainId, to });
         if (hash) {
             const transactionRecord = {
@@ -404,7 +404,9 @@ const _observers = {
                 to,
                 nonce,
                 gasLimit: gasLimit.toString(),
-                gasPrice: gasPrice.toString(),
+                gasPrice: gasPrice === null || gasPrice === void 0 ? void 0 : gasPrice.toString(),
+                maxFeePerGas: maxFeePerGas === null || maxFeePerGas === void 0 ? void 0 : maxFeePerGas.toString(),
+                maxPriorityFeePerGas: maxPriorityFeePerGas === null || maxPriorityFeePerGas === void 0 ? void 0 : maxPriorityFeePerGas.toString(),
                 data,
                 value: value.toString(),
                 submissionBlockTime,

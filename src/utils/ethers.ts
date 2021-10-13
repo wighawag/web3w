@@ -44,7 +44,9 @@ export type TransactionSent = {
   to?: string;
   nonce: number;
   gasLimit: BigNumber;
-  gasPrice: BigNumber;
+  gasPrice?: BigNumber;
+  maxPriorityFeePerGas?: BigNumber;
+  maxFeePerGas?: BigNumber;
   data: string;
   value: BigNumber;
 };

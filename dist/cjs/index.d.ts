@@ -174,6 +174,8 @@ declare type TransactionRecord = {
     to?: string;
     gasLimit?: string;
     gasPrice?: string;
+    maxPriorityFeePerGas?: string;
+    maxFeePerGas?: string;
     data?: string;
     value?: string;
     contractName?: string;
