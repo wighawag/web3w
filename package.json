@@ -1,6 +1,6 @@
 {
   "name": "web3w",
-  "version": "0.3.2-beta.6",
+  "version": "0.3.2-beta.7",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -9,13 +9,6 @@
     "dist/",
     "src/"
   ],
-  "exports": {
-    ".": {
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
-    },
-    "./package.json": "./package.json"
-  },
   "author": "Ronan Sandford",
   "license": "MIT",
   "publishConfig": {
