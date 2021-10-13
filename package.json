@@ -1,10 +1,11 @@
 {
   "name": "web3w",
-  "version": "0.3.2-beta.4",
+  "version": "0.3.2-beta.5",
   "description": "Observable Store for Web3 Browser with ethers contracts integration",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
+  "type": "module",
   "files": [
     "dist/",
     "src/"
@@ -57,7 +58,7 @@
     "typescript": "^4.2.4"
   },
   "scripts": {
-    "prepare": "node .setup.js && npm run lint && npm run build",
+    "prepare": "node .setup.cjs && npm run lint && npm run build",
     "dev": "tsc -w -p tsconfig.json",
     "build:esm": "rimraf dist/esm && tsc -p tsconfig.json",
     "build:cjs": "rimraf dist/cjs && tsc -p tsconfig-cjs.json",
