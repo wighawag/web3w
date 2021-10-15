@@ -1906,9 +1906,7 @@ async function setupFallback(fallbackNodeOrProvider: string | Provider, chainCon
 }
 
 // /////////////////////////////////////////////////////////////////////////////////
-export default (
-  config: Web3wConfig
-): {
+export function initWeb3W(config: Web3wConfig): {
   transactions: TransactionStore;
   balance: BalanceStore;
   chain: ChainStore;
@@ -1916,7 +1914,7 @@ export default (
   builtin: BuiltinStore;
   wallet: WalletStore;
   flow: FlowStore;
-} => {
+} {
   _config = {
     builtin: {
       autoProbe: config.builtin ? config.builtin.autoProbe : false,
@@ -2098,4 +2096,4 @@ export default (
       connect: flow_connect,
     },
   };
-};
+}

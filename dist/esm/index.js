@@ -1634,7 +1634,7 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
     });
 }
 // /////////////////////////////////////////////////////////////////////////////////
-export default (config) => {
+export function initWeb3W(config) {
     _config = {
         builtin: {
             autoProbe: config.builtin ? config.builtin.autoProbe : false,
@@ -1809,5 +1809,5 @@ export default (config) => {
             connect: flow_connect,
         },
     };
-};
+}
 //# sourceMappingURL=index.js.map

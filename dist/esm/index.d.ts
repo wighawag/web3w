@@ -214,8 +214,7 @@ declare function disconnect(config?: {
     keepFlow: boolean;
 }): Promise<void>;
 declare function unlock(): Promise<boolean>;
-declare function flow(func?: (contracts: Contracts) => Promise<void>, type?: string, moduleConfig?: unknown): Promise<Contracts>;
-declare const _default: (config: Web3wConfig) => {
+export declare function initWeb3W(config: Web3wConfig): {
     transactions: TransactionStore;
     balance: BalanceStore;
     chain: ChainStore;
@@ -224,5 +223,5 @@ declare const _default: (config: Web3wConfig) => {
     wallet: WalletStore;
     flow: FlowStore;
 };
-export default _default;
+export {};
 //# sourceMappingURL=index.d.ts.map

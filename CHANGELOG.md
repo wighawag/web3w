@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.8
+
+### Patch Changes
+
+- using named export
+
 ## 0.3.2-beta.3
 
 ### Patch Changes

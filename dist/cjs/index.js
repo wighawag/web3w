@@ -9,6 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.initWeb3W = void 0;
 const contracts_1 = require("@ethersproject/contracts");
 const providers_1 = require("@ethersproject/providers");
 const abi_1 = require("@ethersproject/abi");
@@ -1636,7 +1637,7 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
     });
 }
 // /////////////////////////////////////////////////////////////////////////////////
-exports.default = (config) => {
+function initWeb3W(config) {
     _config = {
         builtin: {
             autoProbe: config.builtin ? config.builtin.autoProbe : false,
@@ -1811,5 +1812,6 @@ exports.default = (config) => {
             connect: flow_connect,
         },
     };
-};
+}
+exports.initWeb3W = initWeb3W;
 //# sourceMappingURL=index.js.map
