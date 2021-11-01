@@ -834,6 +834,10 @@ function select(type, moduleConfig) {
                         }
                         accounts = [];
                     }
+                    else if (e.code === 4001) {
+                        // "No Frame account selected" (frame.sh)
+                        accounts = [];
+                    }
                     else {
                         throw e;
                     }

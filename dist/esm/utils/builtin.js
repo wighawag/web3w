@@ -34,6 +34,9 @@ export function getVendor(ethereum) {
     else if (ethereum.isMetaMask) {
         return 'Metamask';
     }
+    else if (ethereum.isFrame) {
+        return 'Frame';
+    }
     else if (navigator.userAgent.indexOf('Opera') != -1 ||
         navigator.userAgent.indexOf('OPR/') != -1) {
         return 'Opera';

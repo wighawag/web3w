@@ -1094,6 +1094,9 @@ async function select(type: string, moduleConfig?: any) {
             logger.log(`permission denied`);
           }
           accounts = [];
+        } else if (e.code === 4001) {
+          // "No Frame account selected" (frame.sh)
+          accounts = [];
         } else {
           throw e;
         }
