@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.10
+
+### Patch Changes
+
+- use unchecked transaction by default
+
 ## 0.3.2-beta.9
 
 ### Patch Changes

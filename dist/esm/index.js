@@ -403,12 +403,12 @@ const _observers = {
                 status: 'pending',
                 to,
                 nonce,
-                gasLimit: gasLimit.toString(),
+                gasLimit: gasLimit === null || gasLimit === void 0 ? void 0 : gasLimit.toString(),
                 gasPrice: gasPrice === null || gasPrice === void 0 ? void 0 : gasPrice.toString(),
                 maxFeePerGas: maxFeePerGas === null || maxFeePerGas === void 0 ? void 0 : maxFeePerGas.toString(),
                 maxPriorityFeePerGas: maxPriorityFeePerGas === null || maxPriorityFeePerGas === void 0 ? void 0 : maxPriorityFeePerGas.toString(),
                 data,
-                value: value.toString(),
+                value: value === null || value === void 0 ? void 0 : value.toString(),
                 submissionBlockTime,
                 confirmations: 0,
                 finalized: false,
@@ -601,7 +601,9 @@ function loadChain(chainId, address, newProviderRequired) {
                 const contractInfo = contractsInfos[contractName];
                 if (contractInfo.abi) {
                     logger.log({ contractName });
-                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)), contractName, chainId, _observers);
+                    contractsToAdd[contractName] = proxyContract(new Contract(contractInfo.address, contractInfo.abi, _config.transactions.waitForTransactionDetails
+                        ? ethersProvider.getSigner(address)
+                        : ethersProvider.getSigner(address).connectUnchecked()), contractName, chainId, _observers);
                 }
                 addresses[contractName] = contractInfo.address;
             }
@@ -1045,6 +1047,7 @@ function unlock() {
                 accounts = accounts || [];
             }
             catch (e) {
+                console.error(e); // TODO Frame account selection ?
                 accounts = [];
             }
             if (accounts.length > 0) {
@@ -1653,6 +1656,7 @@ export function initWeb3W(config) {
         autoSelectPrevious: config.autoSelectPrevious ? true : false,
         localStoragePrefix: config.localStoragePrefix || '',
         transactions: {
+            waitForTransactionDetails: (config.transactions && config.transactions.waitForTransactionDetails) || false,
             autoDelete: config.transactions && typeof config.transactions.autoDelete !== 'undefined'
                 ? config.transactions.autoDelete
                 : true,

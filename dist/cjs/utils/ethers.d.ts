@@ -30,7 +30,7 @@ export declare type Transaction = {
     from: string;
     chainId: string;
     to?: string;
-    nonce?: BigNumberish;
+    nonce: number;
     gasLimit?: BigNumberish;
     gasPrice?: BigNumberish;
     data?: string;
@@ -43,12 +43,12 @@ export declare type TransactionSent = {
     chainId: string;
     to?: string;
     nonce: number;
-    gasLimit: BigNumber;
+    gasLimit?: BigNumber;
     gasPrice?: BigNumber;
     maxPriorityFeePerGas?: BigNumber;
     maxFeePerGas?: BigNumber;
-    data: string;
-    value: BigNumber;
+    data?: string;
+    value?: BigNumber;
 };
 export declare type SignatureRequest = {
     from: string;

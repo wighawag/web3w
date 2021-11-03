@@ -200,6 +200,7 @@ export declare type Web3wConfig = {
     autoSelectPrevious?: boolean;
     localStoragePrefix?: string;
     transactions?: {
+        waitForTransactionDetails?: boolean;
         autoDelete?: boolean;
         finality?: number;
         pollingPeriod?: number;

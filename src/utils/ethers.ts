@@ -30,7 +30,7 @@ export type Transaction = {
   from: string;
   chainId: string;
   to?: string;
-  nonce?: BigNumberish;
+  nonce: number;
   gasLimit?: BigNumberish;
   gasPrice?: BigNumberish;
   data?: string;
@@ -43,12 +43,12 @@ export type TransactionSent = {
   chainId: string;
   to?: string;
   nonce: number;
-  gasLimit: BigNumber;
+  gasLimit?: BigNumber;
   gasPrice?: BigNumber;
   maxPriorityFeePerGas?: BigNumber;
   maxFeePerGas?: BigNumber;
-  data: string;
-  value: BigNumber;
+  data?: string;
+  value?: BigNumber;
 };
 
 export type SignatureRequest = {from: string; message: unknown};
@@ -167,6 +167,12 @@ export function proxyContract(
             overrides = {...overrides}; // copy to preserve original object
             delete overrides.metadata;
           }
+          if (!overrides) {
+            overrides = {};
+          }
+          if (!overrides.nonce) {
+            overrides.nonce = await contractToProxy.signer.getTransactionCount();
+          }
           onContractTxRequested({
             to: contractToProxy.address,
             from,
@@ -180,7 +186,7 @@ export function proxyContract(
           });
           let tx;
           try {
-            tx = await method.bind(functions)(...argumentsList);
+            tx = await method.bind(functions)(...args, overrides);
           } catch (e) {
             onContractTxCancelled({
               to: contractToProxy.address,
@@ -268,18 +274,24 @@ function proxySigner(
       sendTransaction: async (method: AnyFunction, thisArg: any, argumentsList: any[]) => {
         const from = await signer.getAddress();
         const chainId = await (await signer.getChainId()).toString();
-        const txRequest = {...argumentsList[0], from, chainId};
+        const txParams = {...argumentsList[0]};
+        const extraArgs = argumentsList.slice(1);
+        let {nonce} = txParams;
+        if (!nonce) {
+          nonce = txParams.nonce = await signer.getTransactionCount();
+        }
+        const txRequest = {...txParams, from, chainId, nonce};
         onTxRequested(txRequest);
         let tx: TransactionResponse;
         try {
-          tx = (await method.bind(thisArg)(...argumentsList)) as TransactionResponse;
+          tx = (await method.bind(thisArg)(txParams, ...extraArgs)) as TransactionResponse;
         } catch (e) {
           onTxCancelled(txRequest);
           throw e;
         }
         const latestBlock = await signer.provider.getBlock('latest');
         const submissionBlockTime = latestBlock.timestamp;
-        onTxSent({...tx, submissionBlockTime, chainId});
+        onTxSent({...tx, from, nonce, submissionBlockTime, chainId});
         return tx;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

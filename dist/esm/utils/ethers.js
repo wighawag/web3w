@@ -67,6 +67,12 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                         overrides = Object.assign({}, overrides); // copy to preserve original object
                         delete overrides.metadata;
                     }
+                    if (!overrides) {
+                        overrides = {};
+                    }
+                    if (!overrides.nonce) {
+                        overrides.nonce = yield contractToProxy.signer.getTransactionCount();
+                    }
                     onContractTxRequested({
                         to: contractToProxy.address,
                         from,
@@ -80,7 +86,7 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                     });
                     let tx;
                     try {
-                        tx = yield method.bind(functions)(...argumentsList);
+                        tx = yield method.bind(functions)(...args, overrides);
                     }
                     catch (e) {
                         onContractTxCancelled({
@@ -160,11 +166,17 @@ function proxySigner(signer, applyMap, { onTxRequested, onTxCancelled, onTxSent,
         sendTransaction: (method, thisArg, argumentsList) => __awaiter(this, void 0, void 0, function* () {
             const from = yield signer.getAddress();
             const chainId = yield (yield signer.getChainId()).toString();
-            const txRequest = Object.assign(Object.assign({}, argumentsList[0]), { from, chainId });
+            const txParams = Object.assign({}, argumentsList[0]);
+            const extraArgs = argumentsList.slice(1);
+            let { nonce } = txParams;
+            if (!nonce) {
+                nonce = txParams.nonce = yield signer.getTransactionCount();
+            }
+            const txRequest = Object.assign(Object.assign({}, txParams), { from, chainId, nonce });
             onTxRequested(txRequest);
             let tx;
             try {
-                tx = (yield method.bind(thisArg)(...argumentsList));
+                tx = (yield method.bind(thisArg)(txParams, ...extraArgs));
             }
             catch (e) {
                 onTxCancelled(txRequest);
@@ -172,7 +184,7 @@ function proxySigner(signer, applyMap, { onTxRequested, onTxCancelled, onTxSent,
             }
             const latestBlock = yield signer.provider.getBlock('latest');
             const submissionBlockTime = latestBlock.timestamp;
-            onTxSent(Object.assign(Object.assign({}, tx), { submissionBlockTime, chainId }));
+            onTxSent(Object.assign(Object.assign({}, tx), { from, nonce, submissionBlockTime, chainId }));
             return tx;
         }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

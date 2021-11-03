@@ -221,6 +221,7 @@ export type Web3wConfig = {
   autoSelectPrevious?: boolean;
   localStoragePrefix?: string;
   transactions?: {
+    waitForTransactionDetails?: boolean;
     autoDelete?: boolean;
     finality?: number;
     pollingPeriod?: number;
@@ -238,6 +239,7 @@ type ResolvedWeb3WConfig = {
   autoSelectPrevious: boolean;
   localStoragePrefix: string;
   transactions: {
+    waitForTransactionDetails: boolean;
     autoDelete: boolean;
     finality: number;
     pollingPeriod: number;
@@ -657,12 +659,12 @@ const _observers = {
         status: 'pending',
         to,
         nonce,
-        gasLimit: gasLimit.toString(),
+        gasLimit: gasLimit?.toString(),
         gasPrice: gasPrice?.toString(),
         maxFeePerGas: maxFeePerGas?.toString(),
         maxPriorityFeePerGas: maxPriorityFeePerGas?.toString(),
         data,
-        value: value.toString(),
+        value: value?.toString(),
         submissionBlockTime,
         confirmations: 0,
         finalized: false,
@@ -863,7 +865,13 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
       if (contractInfo.abi) {
         logger.log({contractName});
         contractsToAdd[contractName] = proxyContract(
-          new Contract(contractInfo.address, contractInfo.abi, ethersProvider.getSigner(address)),
+          new Contract(
+            contractInfo.address,
+            contractInfo.abi,
+            _config.transactions.waitForTransactionDetails
+              ? ethersProvider.getSigner(address)
+              : ethersProvider.getSigner(address).connectUnchecked()
+          ),
           contractName,
           chainId,
           _observers
@@ -1302,6 +1310,7 @@ function unlock() {
         accounts = await _ethersProvider?.send('eth_requestAccounts', []);
         accounts = accounts || [];
       } catch (e) {
+        console.error(e); // TODO Frame account selection ?
         accounts = [];
       }
       if (accounts.length > 0) {
@@ -1932,6 +1941,7 @@ export function initWeb3W(config: Web3wConfig): {
     autoSelectPrevious: config.autoSelectPrevious ? true : false,
     localStoragePrefix: config.localStoragePrefix || '',
     transactions: {
+      waitForTransactionDetails: (config.transactions && config.transactions.waitForTransactionDetails) || false,
       autoDelete:
         config.transactions && typeof config.transactions.autoDelete !== 'undefined'
           ? config.transactions.autoDelete
