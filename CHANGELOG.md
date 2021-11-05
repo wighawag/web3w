@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.11
+
+### Patch Changes
+
+- fix
+
 ## 0.3.2-beta.10
 
 ### Patch Changes

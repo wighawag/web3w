@@ -59,7 +59,7 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                     if (numArguments === methodInterface.inputs.length + 1 &&
                         typeof argumentsList[numArguments - 1] === 'object') {
                         args = args.slice(0, numArguments - 1);
-                        overrides = argumentsList[numArguments];
+                        overrides = argumentsList[numArguments - 1];
                     }
                     let metadata;
                     if (overrides) {
