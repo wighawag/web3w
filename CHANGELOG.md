@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.14
+
+### Patch Changes
+
+- access fallback provider if any
+
 ## 0.3.2-beta.13
 
 ### Patch Changes

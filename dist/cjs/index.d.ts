@@ -73,6 +73,7 @@ export declare type WalletStore = Readable<WalletData> & {
     readonly options: string[];
     readonly address: string | undefined;
     readonly provider: JsonRpcProvider | undefined;
+    readonly fallbackProvider: Provider | undefined;
     readonly web3Provider: WindowWeb3Provider | undefined;
     readonly chain: ChainData;
     readonly contracts: Contracts | undefined;
@@ -98,6 +99,7 @@ export declare type ChainStore = Readable<ChainData> & {
 export declare type FallbackStore = Readable<FallbackData> & {
     readonly contracts: Contracts | undefined;
     readonly state: 'Idle' | 'Connected' | 'Ready';
+    readonly provider: Provider | undefined;
 };
 export declare type BalanceStore = Readable<BalanceData> & {
     acknowledgeError: () => void;

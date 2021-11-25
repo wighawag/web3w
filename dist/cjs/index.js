@@ -125,6 +125,7 @@ function set(store, obj) {
 // //////////////////////////////////////////////////////////////////////////////
 let _listenning = false;
 let _ethersProvider;
+let _fallbackProvider;
 let _web3Provider;
 let _builtinWeb3Provider;
 let _chainConfigs;
@@ -1572,6 +1573,7 @@ function setupFallback(fallbackNodeOrProvider, chainConfigs) {
         if (typeof fallbackNodeOrProvider === 'string') {
             fallbackNodeOrProvider = new providers_1.JsonRpcProvider(fallbackNodeOrProvider);
         }
+        _fallbackProvider = fallbackNodeOrProvider;
         set(fallbackStore, { connecting: true });
         let chainIdAsNumber;
         try {
@@ -1775,6 +1777,9 @@ function initWeb3W(config) {
             get state() {
                 return $fallback.state;
             },
+            get provider() {
+                return _fallbackProvider;
+            },
         },
         builtin: {
             subscribe: builtinStore.subscribe,
@@ -1814,9 +1819,9 @@ function initWeb3W(config) {
             get balance() {
                 return $balance.amount;
             },
-            // get fallBackProvider() {
-            //   return _fallBackProvider;
-            // }
+            get fallbackProvider() {
+                return _fallbackProvider;
+            },
         },
         flow: {
             subscribe: flowStore.subscribe,

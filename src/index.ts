@@ -91,6 +91,7 @@ export type WalletStore = Readable<WalletData> & {
   readonly options: string[];
   readonly address: string | undefined;
   readonly provider: JsonRpcProvider | undefined;
+  readonly fallbackProvider: Provider | undefined;
   readonly web3Provider: WindowWeb3Provider | undefined;
   readonly chain: ChainData;
   readonly contracts: Contracts | undefined;
@@ -120,6 +121,7 @@ export type ChainStore = Readable<ChainData> & {
 export type FallbackStore = Readable<FallbackData> & {
   readonly contracts: Contracts | undefined;
   readonly state: 'Idle' | 'Connected' | 'Ready';
+  readonly provider: Provider | undefined;
 };
 export type BalanceStore = Readable<BalanceData> & {
   acknowledgeError: () => void;
@@ -370,6 +372,7 @@ function set<T>(store: WritableWithData<T>, obj: Partial<T>) {
 
 let _listenning = false;
 let _ethersProvider: JsonRpcProvider | undefined;
+let _fallbackProvider: Provider | undefined;
 let _web3Provider: WindowWeb3Provider | undefined;
 let _builtinWeb3Provider: WindowWeb3Provider | undefined;
 let _chainConfigs: ChainConfigs | undefined;
@@ -1848,6 +1851,7 @@ async function setupFallback(fallbackNodeOrProvider: string | Provider, chainCon
   if (typeof fallbackNodeOrProvider === 'string') {
     fallbackNodeOrProvider = new JsonRpcProvider(fallbackNodeOrProvider);
   }
+  _fallbackProvider = fallbackNodeOrProvider;
   set(fallbackStore, {connecting: true});
   let chainIdAsNumber;
   try {
@@ -2066,6 +2070,9 @@ export function initWeb3W(config: Web3wConfig): {
       get state() {
         return $fallback.state;
       },
+      get provider() {
+        return _fallbackProvider;
+      },
     },
     builtin: {
       subscribe: builtinStore.subscribe,
@@ -2105,9 +2112,9 @@ export function initWeb3W(config: Web3wConfig): {
       get balance() {
         return $balance.amount;
       },
-      // get fallBackProvider() {
-      //   return _fallBackProvider;
-      // }
+      get fallbackProvider() {
+        return _fallbackProvider;
+      },
     },
     flow: {
       subscribe: flowStore.subscribe,
