@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.12
+
+### Patch Changes
+
+- add sync access to builtin vendor
+
 ## 0.3.2-beta.11
 
 ### Patch Changes

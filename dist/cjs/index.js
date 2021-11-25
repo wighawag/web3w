@@ -1780,6 +1780,9 @@ function initWeb3W(config) {
             subscribe: builtinStore.subscribe,
             acknowledgeError: acknowledgeError(builtinStore),
             probe: probeBuiltin,
+            get vendor() {
+                return $builtin.vendor;
+            },
         },
         wallet: {
             subscribe: walletStore.subscribe,

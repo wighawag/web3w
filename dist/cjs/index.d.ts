@@ -87,6 +87,7 @@ export declare type FlowStore = Readable<FlowData> & {
 export declare type BuiltinStore = Readable<BuiltinData> & {
     probe: () => Promise<WindowWeb3Provider>;
     acknowledgeError: () => void;
+    readonly vendor: string | undefined;
 };
 export declare type ChainStore = Readable<ChainData> & {
     acknowledgeError: () => void;
@@ -155,13 +156,13 @@ export declare type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: 
 declare type BuiltinConfig = {
     autoProbe: boolean;
 };
-declare type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'mined';
-declare type ParsedEvent = {
+export declare type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'mined';
+export declare type ParsedEvent = {
     args: Record<string, unknown>;
     name: string;
     signature: string;
 };
-declare type TransactionRecord = {
+export declare type TransactionRecord = {
     hash: string;
     from: string;
     submissionBlockTime: number;

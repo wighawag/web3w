@@ -107,6 +107,7 @@ export type FlowStore = Readable<FlowData> & {
 export type BuiltinStore = Readable<BuiltinData> & {
   probe: () => Promise<WindowWeb3Provider>;
   acknowledgeError: () => void;
+  readonly vendor: string | undefined;
 };
 
 export type ChainStore = Readable<ChainData> & {
@@ -180,11 +181,11 @@ type BuiltinConfig = {
   autoProbe: boolean;
 };
 
-type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'mined';
+export type TransactionStatus = 'pending' | 'cancelled' | 'success' | 'failure' | 'mined';
 
-type ParsedEvent = {args: Record<string, unknown>; name: string; signature: string};
+export type ParsedEvent = {args: Record<string, unknown>; name: string; signature: string};
 
-type TransactionRecord = {
+export type TransactionRecord = {
   hash: string;
   from: string;
   submissionBlockTime: number;
@@ -2069,6 +2070,9 @@ export function initWeb3W(config: Web3wConfig): {
       subscribe: builtinStore.subscribe,
       acknowledgeError: acknowledgeError(builtinStore),
       probe: probeBuiltin,
+      get vendor() {
+        return $builtin.vendor;
+      },
     },
     wallet: {
       subscribe: walletStore.subscribe,
