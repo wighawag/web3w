@@ -95,6 +95,7 @@ export type WalletStore = Readable<WalletData> & {
   readonly chain: ChainData;
   readonly contracts: Contracts | undefined;
   readonly balance: BigNumber | undefined;
+  readonly selected: string | undefined;
 };
 
 export type FlowStore = Readable<FlowData> & {
@@ -2091,6 +2092,9 @@ export function initWeb3W(config: Web3wConfig): {
       },
       get web3Provider() {
         return _web3Provider;
+      },
+      get selected() {
+        return $wallet.selected;
       },
       get chain() {
         return $chain;

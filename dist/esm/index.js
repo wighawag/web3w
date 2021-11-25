@@ -1799,6 +1799,9 @@ export function initWeb3W(config) {
             get web3Provider() {
                 return _web3Provider;
             },
+            get selected() {
+                return $wallet.selected;
+            },
             get chain() {
                 return $chain;
             },

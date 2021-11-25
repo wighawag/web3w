@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.13
+
+### Patch Changes
+
+- add wallet.selected sync access
+
 ## 0.3.2-beta.12
 
 ### Patch Changes

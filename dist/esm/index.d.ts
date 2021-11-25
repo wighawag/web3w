@@ -77,6 +77,7 @@ export declare type WalletStore = Readable<WalletData> & {
     readonly chain: ChainData;
     readonly contracts: Contracts | undefined;
     readonly balance: BigNumber | undefined;
+    readonly selected: string | undefined;
 };
 export declare type FlowStore = Readable<FlowData> & {
     execute(func?: (contracts: Contracts) => Promise<void>): Promise<Contracts>;
