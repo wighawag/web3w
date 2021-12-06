@@ -184,7 +184,10 @@ function onChainChanged(chainId) {
         if ($wallet.address) {
             loadTransactions($wallet.address, chainIdAsDecimal);
             logger.log('LOAD_CHAIN from chainChanged');
-            yield loadChain(chainIdAsDecimal, $wallet.address, true);
+            try {
+                yield loadChain(chainIdAsDecimal, $wallet.address, true);
+            }
+            catch (e) { }
         }
     });
 }
@@ -208,7 +211,10 @@ function onAccountsChanged(accounts) {
             if ($chain.state === 'Connected') {
                 if ($chain.chainId) {
                     logger.log('LOAD_CHAIN from accountsChanged');
-                    yield loadChain($chain.chainId, address, false);
+                    try {
+                        yield loadChain($chain.chainId, address, false);
+                    }
+                    catch (e) { }
                 }
                 else {
                     throw new Error('no chainId while connected');
@@ -537,7 +543,10 @@ function setupChain(address, newProviderRequired) {
         }
         loadTransactions(address, chainId); // TODO wallet address might not be available
         logger.log('LOAD_CHAIN from setupChain');
-        yield loadChain(chainId, address, newProviderRequired);
+        try {
+            yield loadChain(chainId, address, newProviderRequired);
+        }
+        catch (e) { }
     });
 }
 function getContractInfos(chainConfigs, chainId) {

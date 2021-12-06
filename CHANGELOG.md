@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.15
+
+### Patch Changes
+
+- catch loadChain missing contract info
+
 ## 0.3.2-beta.14
 
 ### Patch Changes
