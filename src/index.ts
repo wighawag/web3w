@@ -432,7 +432,9 @@ async function onChainChanged(chainId: string) {
   if ($wallet.address) {
     loadTransactions($wallet.address, chainIdAsDecimal);
     logger.log('LOAD_CHAIN from chainChanged');
-    await loadChain(chainIdAsDecimal, $wallet.address, true);
+    try {
+      await loadChain(chainIdAsDecimal, $wallet.address, true);
+    } catch (e) {}
   }
 }
 
@@ -456,7 +458,9 @@ async function onAccountsChanged(accounts: string[]) {
     if ($chain.state === 'Connected') {
       if ($chain.chainId) {
         logger.log('LOAD_CHAIN from accountsChanged');
-        await loadChain($chain.chainId, address, false);
+        try {
+          await loadChain($chain.chainId, address, false);
+        } catch (e) {}
       } else {
         throw new Error('no chainId while connected');
       }
@@ -805,7 +809,9 @@ async function setupChain(address: string, newProviderRequired: boolean) {
   }
   loadTransactions(address, chainId); // TODO wallet address might not be available
   logger.log('LOAD_CHAIN from setupChain');
-  await loadChain(chainId, address, newProviderRequired);
+  try {
+    await loadChain(chainId, address, newProviderRequired);
+  } catch (e) {}
 }
 
 function getContractInfos(chainConfigs: MultiChainConfigs | ChainConfig, chainId: string): ContractsInfos {
