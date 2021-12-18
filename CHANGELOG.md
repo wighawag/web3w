@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.16
+
+### Patch Changes
+
+- add updateContracts to allow dynamic changes of address or even linked data
+
 ## 0.3.2-beta.15
 
 ### Patch Changes

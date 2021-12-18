@@ -117,6 +117,7 @@ export type ChainStore = Readable<ChainData> & {
   acknowledgeError: () => void;
   acknowledgeNewGenesisHash: () => void;
   readonly contracts: Contracts | undefined;
+  updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void>;
 };
 export type FallbackStore = Readable<FallbackData> & {
   readonly contracts: Contracts | undefined;
@@ -249,6 +250,7 @@ type ResolvedWeb3WConfig = {
     pollingPeriod: number;
   };
   checkGenesis: boolean;
+  fallbackNode?: string | Provider;
 };
 
 const isBrowser = typeof window != 'undefined';
@@ -750,6 +752,27 @@ function fetchPreviousSelection() {
   } catch (e) {
     return null;
   }
+}
+
+let _updateContractsPromise: Promise<void>;
+async function _updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void> {
+  _chainConfigs = chainConfigs;
+  if (_config.fallbackNode) {
+    await setupFallback(_config.fallbackNode, chainConfigs);
+  }
+  if ($chain.chainId && $wallet.address) {
+    await loadChain($chain.chainId, $wallet.address, false);
+  }
+}
+
+async function updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void> {
+  if (_updateContractsPromise) {
+    try {
+      await _updateContractsPromise;
+    } catch (e) {}
+  }
+  _updateContractsPromise = _updateContracts(chainConfigs);
+  await _updateContractsPromise;
 }
 
 async function setupChain(address: string, newProviderRequired: boolean) {
@@ -1962,6 +1985,7 @@ export function initWeb3W(config: Web3wConfig): {
       pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
     },
     checkGenesis: config.checkGenesis || false,
+    fallbackNode: config.fallbackNode,
   };
   if (!_config.options || _config.options.length === 0) {
     _config.options = ['builtin'];
@@ -2067,6 +2091,7 @@ export function initWeb3W(config: Web3wConfig): {
       get contracts() {
         return $chain.contracts;
       },
+      updateContracts,
     },
     fallback: {
       subscribe: fallbackStore.subscribe,
