@@ -95,6 +95,7 @@ export declare type ChainStore = Readable<ChainData> & {
     acknowledgeError: () => void;
     acknowledgeNewGenesisHash: () => void;
     readonly contracts: Contracts | undefined;
+    updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void>;
 };
 export declare type FallbackStore = Readable<FallbackData> & {
     readonly contracts: Contracts | undefined;

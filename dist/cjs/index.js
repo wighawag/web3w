@@ -486,6 +486,30 @@ function fetchPreviousSelection() {
         return null;
     }
 }
+let _updateContractsPromise;
+function _updateContracts(chainConfigs) {
+    return __awaiter(this, void 0, void 0, function* () {
+        _chainConfigs = chainConfigs;
+        if (_config.fallbackNode) {
+            yield setupFallback(_config.fallbackNode, chainConfigs);
+        }
+        if ($chain.chainId && $wallet.address) {
+            yield loadChain($chain.chainId, $wallet.address, false);
+        }
+    });
+}
+function updateContracts(chainConfigs) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (_updateContractsPromise) {
+            try {
+                yield _updateContractsPromise;
+            }
+            catch (e) { }
+        }
+        _updateContractsPromise = _updateContracts(chainConfigs);
+        yield _updateContractsPromise;
+    });
+}
 function setupChain(address, newProviderRequired) {
     return __awaiter(this, void 0, void 0, function* () {
         const ethersProvider = ensureEthersProvider(newProviderRequired);
@@ -1678,6 +1702,7 @@ function initWeb3W(config) {
             pollingPeriod: (config.transactions && config.transactions.pollingPeriod) || 10,
         },
         checkGenesis: config.checkGenesis || false,
+        fallbackNode: config.fallbackNode,
     };
     if (!_config.options || _config.options.length === 0) {
         _config.options = ['builtin'];
@@ -1777,6 +1802,7 @@ function initWeb3W(config) {
             get contracts() {
                 return $chain.contracts;
             },
+            updateContracts,
         },
         fallback: {
             subscribe: fallbackStore.subscribe,
