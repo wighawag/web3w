@@ -95,7 +95,7 @@ export declare type ChainStore = Readable<ChainData> & {
     acknowledgeError: () => void;
     acknowledgeNewGenesisHash: () => void;
     readonly contracts: Contracts | undefined;
-    updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void>;
+    updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>): Promise<void>;
 };
 export declare type FallbackStore = Readable<FallbackData> & {
     readonly contracts: Contracts | undefined;
@@ -148,15 +148,15 @@ declare type ContractsInfos = {
         abi: Abi;
     };
 };
-export declare type ChainConfig = {
+export declare type ChainConfig<ContractTypes extends ContractsInfos = ContractsInfos> = {
     chainId: string;
     name?: string;
-    contracts: ContractsInfos;
+    contracts: ContractTypes;
 };
-export declare type MultiChainConfigs = {
-    [chainId: string]: ChainConfig;
+export declare type MultiChainConfigs<ContractTypes extends ContractsInfos = ContractsInfos> = {
+    [chainId: string]: ChainConfig<ContractTypes>;
 };
-export declare type ChainConfigs = MultiChainConfigs | ChainConfig | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
+export declare type ChainConfigs<ContractTypes extends ContractsInfos = ContractsInfos> = MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes> | ((chainId: string) => Promise<ChainConfig<ContractTypes> | MultiChainConfigs<ContractTypes>>);
 declare type BuiltinConfig = {
     autoProbe: boolean;
 };
@@ -193,14 +193,14 @@ export declare type TransactionRecord = {
     blockNumber?: number;
     events?: ParsedEvent[];
 };
-export declare type Web3wConfig = {
+export declare type Web3wConfig<ContractTypes extends ContractsInfos = ContractsInfos> = {
     builtin?: BuiltinConfig;
     flow?: {
         autoSelect?: boolean;
         autoUnlock?: boolean;
     };
     debug?: boolean;
-    chainConfigs?: ChainConfigs;
+    chainConfigs?: ChainConfigs<ContractTypes>;
     options?: ModuleOptions;
     autoSelectPrevious?: boolean;
     localStoragePrefix?: string;
@@ -220,7 +220,7 @@ declare function disconnect(config?: {
     keepFlow: boolean;
 }): Promise<void>;
 declare function unlock(): Promise<boolean>;
-export declare function initWeb3W(config: Web3wConfig): {
+export declare function initWeb3W<ContractTypes extends ContractsInfos = ContractsInfos>(config: Web3wConfig<ContractTypes>): {
     transactions: TransactionStore;
     balance: BalanceStore;
     chain: ChainStore;

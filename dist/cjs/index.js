@@ -1802,7 +1802,9 @@ function initWeb3W(config) {
             get contracts() {
                 return $chain.contracts;
             },
-            updateContracts,
+            updateContracts(chainConfigs) {
+                return updateContracts(chainConfigs);
+            },
         },
         fallback: {
             subscribe: fallbackStore.subscribe,

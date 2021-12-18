@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.17
+
+### Patch Changes
+
+- add types for contracts infos
+
 ## 0.3.2-beta.16
 
 ### Patch Changes
