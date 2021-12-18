@@ -117,7 +117,9 @@ export type ChainStore = Readable<ChainData> & {
   acknowledgeError: () => void;
   acknowledgeNewGenesisHash: () => void;
   readonly contracts: Contracts | undefined;
-  updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void>;
+  updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(
+    chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>
+  ): Promise<void>;
 };
 export type FallbackStore = Readable<FallbackData> & {
   readonly contracts: Contracts | undefined;
@@ -168,18 +170,20 @@ export type Web3WModule = {
 
 type ModuleOptions = (string | Web3WModule | Web3WModuleLoader)[];
 type ContractsInfos = {[name: string]: {address: string; abi: Abi}};
-export type ChainConfig = {
+export type ChainConfig<ContractTypes extends ContractsInfos = ContractsInfos> = {
   chainId: string;
   name?: string;
-  contracts: ContractsInfos;
+  contracts: ContractTypes;
 };
 
-export type MultiChainConfigs = {[chainId: string]: ChainConfig};
+export type MultiChainConfigs<ContractTypes extends ContractsInfos = ContractsInfos> = {
+  [chainId: string]: ChainConfig<ContractTypes>;
+};
 
-export type ChainConfigs =
-  | MultiChainConfigs
-  | ChainConfig
-  | ((chainId: string) => Promise<ChainConfig | MultiChainConfigs>);
+export type ChainConfigs<ContractTypes extends ContractsInfos = ContractsInfos> =
+  | MultiChainConfigs<ContractTypes>
+  | ChainConfig<ContractTypes>
+  | ((chainId: string) => Promise<ChainConfig<ContractTypes> | MultiChainConfigs<ContractTypes>>);
 
 type BuiltinConfig = {
   autoProbe: boolean;
@@ -217,11 +221,11 @@ export type TransactionRecord = {
   events?: ParsedEvent[];
 };
 
-export type Web3wConfig = {
+export type Web3wConfig<ContractTypes extends ContractsInfos = ContractsInfos> = {
   builtin?: BuiltinConfig;
   flow?: {autoSelect?: boolean; autoUnlock?: boolean};
   debug?: boolean;
-  chainConfigs?: ChainConfigs;
+  chainConfigs?: ChainConfigs<ContractTypes>;
   options?: ModuleOptions;
   autoSelectPrevious?: boolean;
   localStoragePrefix?: string;
@@ -235,11 +239,11 @@ export type Web3wConfig = {
   checkGenesis?: boolean;
 };
 
-type ResolvedWeb3WConfig = {
+type ResolvedWeb3WConfig<ContractTypes extends ContractsInfos = ContractsInfos> = {
   builtin: BuiltinConfig;
   flow: {autoSelect: boolean; autoUnlock: boolean};
   debug: boolean;
-  chainConfigs?: ChainConfigs;
+  chainConfigs?: ChainConfigs<ContractTypes>;
   options: ModuleOptions;
   autoSelectPrevious: boolean;
   localStoragePrefix: string;
@@ -755,7 +759,9 @@ function fetchPreviousSelection() {
 }
 
 let _updateContractsPromise: Promise<void>;
-async function _updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void> {
+async function _updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(
+  chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>
+): Promise<void> {
   _chainConfigs = chainConfigs;
   if (_config.fallbackNode) {
     await setupFallback(_config.fallbackNode, chainConfigs);
@@ -765,7 +771,9 @@ async function _updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): 
   }
 }
 
-async function updateContracts(chainConfigs: MultiChainConfigs | ChainConfig): Promise<void> {
+async function updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(
+  chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>
+): Promise<void> {
   if (_updateContractsPromise) {
     try {
       await _updateContractsPromise;
@@ -1953,7 +1961,9 @@ async function setupFallback(fallbackNodeOrProvider: string | Provider, chainCon
 }
 
 // /////////////////////////////////////////////////////////////////////////////////
-export function initWeb3W(config: Web3wConfig): {
+export function initWeb3W<ContractTypes extends ContractsInfos = ContractsInfos>(
+  config: Web3wConfig<ContractTypes>
+): {
   transactions: TransactionStore;
   balance: BalanceStore;
   chain: ChainStore;
@@ -2091,7 +2101,11 @@ export function initWeb3W(config: Web3wConfig): {
       get contracts() {
         return $chain.contracts;
       },
-      updateContracts,
+      updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(
+        chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>
+      ): Promise<void> {
+        return updateContracts(chainConfigs);
+      },
     },
     fallback: {
       subscribe: fallbackStore.subscribe,
