@@ -192,9 +192,14 @@ function switchChain(chainId, config) {
                         ]);
                     }
                     catch (e) {
-                        set(chainStore, {
-                            error: e,
-                        });
+                        if (e.code !== 4001) {
+                            set(chainStore, {
+                                error: e,
+                            });
+                        }
+                        else {
+                            return;
+                        }
                     }
                 }
                 else {
@@ -204,9 +209,14 @@ function switchChain(chainId, config) {
                 }
             }
             else {
-                set(chainStore, {
-                    error: e,
-                });
+                if (e.code !== 4001) {
+                    set(chainStore, {
+                        error: e,
+                    });
+                }
+                else {
+                    return;
+                }
             }
         }
     });

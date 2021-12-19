@@ -465,9 +465,13 @@ async function switchChain(
             },
           ]);
         } catch (e) {
-          set(chainStore, {
-            error: e,
-          });
+          if (e.code !== 4001) {
+            set(chainStore, {
+              error: e,
+            });
+          } else {
+            return;
+          }
         }
       } else {
         set(chainStore, {
@@ -475,9 +479,13 @@ async function switchChain(
         });
       }
     } else {
-      set(chainStore, {
-        error: e,
-      });
+      if (e.code !== 4001) {
+        set(chainStore, {
+          error: e,
+        });
+      } else {
+        return;
+      }
     }
   }
 }
