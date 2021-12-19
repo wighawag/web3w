@@ -18,7 +18,14 @@ import {
 import type {EventsABI} from './utils/ethers';
 import {Writable, Readable} from './utils/internals';
 import {logs} from 'named-logs';
-import {CHAIN_NO_PROVIDER, CHAIN_CONFIG_NOT_AVAILABLE, MODULE_ERROR, CHAIN_ID_FAILED, CHAIN_ID_NOT_SET} from './errors';
+import {
+  CHAIN_NO_PROVIDER,
+  CHAIN_CONFIG_NOT_AVAILABLE,
+  MODULE_ERROR,
+  CHAIN_ID_FAILED,
+  CHAIN_ID_NOT_SET,
+  CHAIN_NOT_AVAILABLE_ON_WALLET,
+} from './errors';
 
 const logger = logs('web3w:index');
 
@@ -120,6 +127,7 @@ export type ChainStore = Readable<ChainData> & {
   updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(
     chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>
   ): Promise<void>;
+  switchChain(chainId: string): Promise<void>;
 };
 export type FallbackStore = Readable<FallbackData> & {
   readonly contracts: Contracts | undefined;
@@ -416,6 +424,62 @@ async function checkGenesis(ethersProvider: JsonRpcProvider, chainId: string): P
     }
   }
   return networkChanged;
+}
+
+async function switchChain(
+  chainId: string,
+  config?: {
+    rpcUrls?: string[];
+    blockExplorerUrls?: string[];
+    chainName?: string;
+    iconUrls?: string[];
+    nativeCurrency?: {
+      name: string;
+      symbol: string;
+      decimals: number;
+    };
+  }
+): Promise<void> {
+  if (!_ethersProvider) {
+    throw new Error(`no provider setup`);
+  }
+  try {
+    // attempt to switch...
+    await _ethersProvider.send('wallet_switchEthereumChain', [
+      {
+        chainId: '0x' + parseInt(chainId).toString(16),
+      },
+    ]);
+  } catch (e) {
+    if (e.code === 4902) {
+      if (config && config.rpcUrls) {
+        try {
+          await _ethersProvider.send('wallet_addEthereumChain', [
+            {
+              chainId: '0x' + parseInt(chainId).toString(16),
+              rpcUrls: config.rpcUrls,
+              chainName: config.chainName,
+              blockExplorerUrls: config.blockExplorerUrls,
+              iconUrls: config.iconUrls,
+              nativeCurrency: config.nativeCurrency,
+            },
+          ]);
+        } catch (e) {
+          set(chainStore, {
+            error: e,
+          });
+        }
+      } else {
+        set(chainStore, {
+          error: {code: CHAIN_NOT_AVAILABLE_ON_WALLET, message: 'Chain not available on your wallet'},
+        });
+      }
+    } else {
+      set(chainStore, {
+        error: e,
+      });
+    }
+  }
 }
 
 async function onChainChanged(chainId: string) {
@@ -1124,7 +1188,7 @@ async function select(type: string, moduleConfig?: any) {
   let accounts: string[];
   try {
     if (type === 'builtin' && $builtin.vendor === 'Metamask') {
-      accounts = await timeout(2000, _ethersProvider.listAccounts(), {
+      accounts = await timeout(4000, _ethersProvider.listAccounts(), {
         error: `Metamask timed out. Please reload the page (see <a href="https://github.com/MetaMask/metamask-extension/issues/7221">here</a>)`,
       }); // TODO timeout checks (metamask, portis)
     } else {
@@ -2106,6 +2170,7 @@ export function initWeb3W<ContractTypes extends ContractsInfos = ContractsInfos>
       ): Promise<void> {
         return updateContracts(chainConfigs);
       },
+      switchChain: switchChain,
     },
     fallback: {
       subscribe: fallbackStore.subscribe,

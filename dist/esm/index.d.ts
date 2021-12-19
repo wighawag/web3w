@@ -36,6 +36,7 @@ export declare type ChainData = BaseData & {
         [name: string]: string;
     };
     contracts?: Contracts;
+    notAvailable?: boolean;
     notSupported?: boolean;
     genesisChanged?: boolean;
 };
@@ -96,6 +97,7 @@ export declare type ChainStore = Readable<ChainData> & {
     acknowledgeNewGenesisHash: () => void;
     readonly contracts: Contracts | undefined;
     updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>): Promise<void>;
+    switchChain(chainId: string): Promise<void>;
 };
 export declare type FallbackStore = Readable<FallbackData> & {
     readonly contracts: Contracts | undefined;

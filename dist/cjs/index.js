@@ -166,6 +166,54 @@ function checkGenesis(ethersProvider, chainId) {
         return networkChanged;
     });
 }
+function switchChain(chainId, config) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!_ethersProvider) {
+            throw new Error(`no provider setup`);
+        }
+        try {
+            // attempt to switch...
+            yield _ethersProvider.send('wallet_switchEthereumChain', [
+                {
+                    chainId: '0x' + parseInt(chainId).toString(16),
+                },
+            ]);
+        }
+        catch (e) {
+            if (e.code === 4902) {
+                if (config && config.rpcUrls) {
+                    try {
+                        yield _ethersProvider.send('wallet_addEthereumChain', [
+                            {
+                                chainId: '0x' + parseInt(chainId).toString(16),
+                                rpcUrls: config.rpcUrls,
+                                chainName: config.chainName,
+                                blockExplorerUrls: config.blockExplorerUrls,
+                                iconUrls: config.iconUrls,
+                                nativeCurrency: config.nativeCurrency,
+                            },
+                        ]);
+                    }
+                    catch (e) {
+                        set(chainStore, {
+                            error: e,
+                        });
+                    }
+                }
+                else {
+                    set(chainStore, {
+                        error: { code: errors_1.CHAIN_NOT_AVAILABLE_ON_WALLET, message: 'Chain not available on your wallet' },
+                    });
+                }
+            }
+            else {
+                set(chainStore, {
+                    error: e,
+                });
+            }
+        }
+    });
+}
 function onChainChanged(chainId) {
     return __awaiter(this, void 0, void 0, function* () {
         if (chainId === '0xNaN') {
@@ -845,7 +893,7 @@ function select(type, moduleConfig) {
         let accounts;
         try {
             if (type === 'builtin' && $builtin.vendor === 'Metamask') {
-                accounts = yield utils_1.timeout(2000, _ethersProvider.listAccounts(), {
+                accounts = yield utils_1.timeout(4000, _ethersProvider.listAccounts(), {
                     error: `Metamask timed out. Please reload the page (see <a href="https://github.com/MetaMask/metamask-extension/issues/7221">here</a>)`,
                 }); // TODO timeout checks (metamask, portis)
             }
@@ -1805,6 +1853,7 @@ function initWeb3W(config) {
             updateContracts(chainConfigs) {
                 return updateContracts(chainConfigs);
             },
+            switchChain: switchChain,
         },
         fallback: {
             subscribe: fallbackStore.subscribe,
