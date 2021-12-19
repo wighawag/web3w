@@ -36,7 +36,6 @@ export declare type ChainData = BaseData & {
         [name: string]: string;
     };
     contracts?: Contracts;
-    notAvailable?: boolean;
     notSupported?: boolean;
     genesisChanged?: boolean;
 };
