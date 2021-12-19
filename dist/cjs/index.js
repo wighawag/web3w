@@ -672,15 +672,26 @@ function loadChain(chainId, address, newProviderRequired) {
                 contractsInfos = getContractInfos(chainConfigs, chainId);
             }
             catch (error) {
-                set(chainStore, {
-                    error,
-                    chainId,
-                    notSupported: true,
-                    connecting: false,
-                    loadingData: false,
-                    state: 'Connected',
-                });
-                throw new Error(error.message || error);
+                if (error.code === errors_1.CHAIN_CONFIG_NOT_AVAILABLE) {
+                    set(chainStore, {
+                        chainId,
+                        notSupported: true,
+                        connecting: false,
+                        loadingData: false,
+                        state: 'Connected',
+                    });
+                    return;
+                }
+                else {
+                    set(chainStore, {
+                        error,
+                        chainId,
+                        connecting: false,
+                        loadingData: false,
+                        state: 'Connected',
+                    });
+                    throw new Error(error.message || error);
+                }
             }
             for (const contractName of Object.keys(contractsInfos)) {
                 const contractInfo = contractsInfos[contractName];

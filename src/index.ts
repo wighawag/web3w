@@ -955,15 +955,25 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
     try {
       contractsInfos = getContractInfos(chainConfigs, chainId);
     } catch (error) {
-      set(chainStore, {
-        error,
-        chainId,
-        notSupported: true,
-        connecting: false,
-        loadingData: false,
-        state: 'Connected',
-      });
-      throw new Error(error.message || error);
+      if (error.code === CHAIN_CONFIG_NOT_AVAILABLE) {
+        set(chainStore, {
+          chainId,
+          notSupported: true,
+          connecting: false,
+          loadingData: false,
+          state: 'Connected',
+        });
+        return;
+      } else {
+        set(chainStore, {
+          error,
+          chainId,
+          connecting: false,
+          loadingData: false,
+          state: 'Connected',
+        });
+        throw new Error(error.message || error);
+      }
     }
 
     for (const contractName of Object.keys(contractsInfos)) {
