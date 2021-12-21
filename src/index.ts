@@ -127,7 +127,20 @@ export type ChainStore = Readable<ChainData> & {
   updateContracts<ContractTypes extends ContractsInfos = ContractsInfos>(
     chainConfigs: MultiChainConfigs<ContractTypes> | ChainConfig<ContractTypes>
   ): Promise<void>;
-  switchChain(chainId: string): Promise<void>;
+  switchChain(
+    chainId: string,
+    config?: {
+      rpcUrls?: string[];
+      blockExplorerUrls?: string[];
+      chainName?: string;
+      iconUrls?: string[];
+      nativeCurrency?: {
+        name: string;
+        symbol: string;
+        decimals: number;
+      };
+    }
+  ): Promise<void>;
 };
 export type FallbackStore = Readable<FallbackData> & {
   readonly contracts: Contracts | undefined;
