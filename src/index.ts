@@ -1658,6 +1658,10 @@ function flow(
         // _flowResolve = undefined;
       });
     }
+  } else if ($wallet.selected && $chain.state === 'Idle') {
+    connect($wallet.selected).catch((error) => {
+      set(flowStore, {error});
+    });
   }
 
   return _flowPromise;
@@ -1922,7 +1926,7 @@ async function listenForTxReceipts(address: string, chainId: string) {
           if (parsed) {
             const args: Record<string, unknown> = {};
             for (const key of Object.keys(parsed.args)) {
-              const value = parsed.args[key];
+              const value = parsed.args[key]; // TODO support BigNumber conversion
               args[key] = JSON.parse(JSON.stringify(value));
             }
             const event = {

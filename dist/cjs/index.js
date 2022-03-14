@@ -1365,6 +1365,11 @@ function flow(func, type, moduleConfig) {
             });
         }
     }
+    else if ($wallet.selected && $chain.state === 'Idle') {
+        connect($wallet.selected).catch((error) => {
+            set(flowStore, { error });
+        });
+    }
     return _flowPromise;
 }
 function flow_cancel() {
@@ -1616,7 +1621,7 @@ function listenForTxReceipts(address, chainId) {
                         if (parsed) {
                             const args = {};
                             for (const key of Object.keys(parsed.args)) {
-                                const value = parsed.args[key];
+                                const value = parsed.args[key]; // TODO support BigNumber conversion
                                 args[key] = JSON.parse(JSON.stringify(value));
                             }
                             const event = {
