@@ -5,6 +5,7 @@
     "web3w": "0.3.1"
   },
   "changesets": [
+    "blue-trains-report",
     "calm-ligers-develop",
     "gorgeous-geckos-fly",
     "hip-flowers-smile",

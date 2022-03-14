@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.23
+
+### Patch Changes
+
+- fix case where wallet ready but not chain
+
 ## 0.3.2-beta.17
 
 ### Patch Changes
