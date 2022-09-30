@@ -144,6 +144,7 @@ export function proxyContract(contractToProxy, name, chainId, observers) {
                 return (signer) => {
                     return proxyContract(contractToProxy.connect(signer), name, chainId, observers);
                 };
+                // TODO attach
             }
             else if (prop === 'toJSON') {
                 return () => ({
