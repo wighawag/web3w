@@ -18,11 +18,23 @@ export declare type BalanceData = BaseData & {
     amount?: BigNumber;
     blockNumber?: number;
 };
+declare type EIP6963ProviderInfo = {
+    uuid: string;
+    name: string;
+    icon: string;
+    rdns: string;
+};
+declare type EIP6963ProviderDetail = {
+    info: EIP6963ProviderInfo;
+    provider: WindowWeb3Provider;
+};
 export declare type BuiltinData = BaseData & {
     probing: boolean;
     state: 'Idle' | 'Ready';
     available?: boolean;
     vendor?: string;
+    walletsAnnounced: EIP6963ProviderDetail[];
+    ethereumAnnounced: boolean;
 };
 declare type Contracts = {
     [name: string]: Contract;

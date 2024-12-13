@@ -43,11 +43,30 @@ export type BalanceData = BaseData & {
   blockNumber?: number;
 };
 
+type EIP6963ProviderInfo = {
+  uuid: string;
+  name: string;
+  icon: string;
+  rdns: string;
+};
+
+type EIP6963ProviderDetail = {
+  info: EIP6963ProviderInfo;
+  provider: WindowWeb3Provider;
+};
+
+interface EIP6963AnnounceProviderEvent extends CustomEvent {
+  type: 'eip6963:announceProvider';
+  detail: EIP6963ProviderDetail;
+}
+
 export type BuiltinData = BaseData & {
   probing: boolean;
   state: 'Idle' | 'Ready';
   available?: boolean;
   vendor?: string;
+  walletsAnnounced: EIP6963ProviderDetail[];
+  ethereumAnnounced: boolean;
 };
 
 type Contracts = {[name: string]: Contract};
@@ -286,6 +305,8 @@ const $builtin: BuiltinData = {
   available: undefined,
   error: undefined,
   vendor: undefined,
+  walletsAnnounced: [],
+  ethereumAnnounced: false,
 };
 
 const $balance: BalanceData = {
@@ -463,7 +484,7 @@ async function switchChain(
         chainId: '0x' + parseInt(chainId).toString(16),
       },
     ]);
-  } catch (e) {
+  } catch (e: any) {
     if (e.code === 4902) {
       if (config && config.rpcUrls && config.rpcUrls.length > 0) {
         try {
@@ -477,7 +498,7 @@ async function switchChain(
               nativeCurrency: config.nativeCurrency,
             },
           ]);
-        } catch (e) {
+        } catch (e: any) {
           if (e.code !== 4001) {
             set(chainStore, {
               error: e,
@@ -975,7 +996,7 @@ async function loadChain(chainId: string, address: string, newProviderRequired: 
     let contractsInfos;
     try {
       contractsInfos = getContractInfos(chainConfigs, chainId);
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === CHAIN_CONFIG_NOT_AVAILABLE) {
         set(chainStore, {
           chainId,
@@ -1148,6 +1169,16 @@ async function select(type: string, moduleConfig?: any) {
     const builtinWeb3Provider = await probeBuiltin(); // TODO try catch ?
     _web3Provider = builtinWeb3Provider;
     _ethersProvider = proxyWeb3Provider(new Web3Provider(builtinWeb3Provider), _observers);
+  } else if (typeof typeOrModule == 'string' && typeOrModule.startsWith('builtin:')) {
+    const splitted = typeof typeOrModule === 'string' && typeOrModule.split(':');
+    const uuid = splitted && splitted[1];
+    const wallet = $builtin.walletsAnnounced.find((v) => v.info?.uuid === uuid);
+    if (!wallet) {
+      const message = `No Builtin Wallet for ${typeOrModule}`;
+      throw new Error(message);
+    }
+    _web3Provider = wallet.provider;
+    _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
   } else {
     let module: Web3WModule | Web3WModuleLoader | undefined;
     if (typeof typeOrModule === 'string') {
@@ -1189,7 +1220,7 @@ async function select(type: string, moduleConfig?: any) {
       _web3Provider = web3Provider;
       _ethersProvider = proxyWeb3Provider(new Web3Provider(_web3Provider), _observers);
       _currentModule = module;
-    } catch (e) {
+    } catch (e: any) {
       if (e.message === 'USER_CANCELED') {
         set(walletStore, {connecting: false, selected: undefined, loadingModule: false});
       } else {
@@ -1227,7 +1258,7 @@ async function select(type: string, moduleConfig?: any) {
       logger.log(`fetching accounts...`);
       try {
         accounts = await _ethersProvider.listAccounts();
-      } catch (e) {
+      } catch (e: any) {
         if (e.code === 4100) {
           logger.log(`4100 ${e.name}`);
           // status-im throw such error if eth_requestAccounts was not called first
@@ -1248,7 +1279,7 @@ async function select(type: string, moduleConfig?: any) {
       }
       logger.log(`accounts: ${accounts}`);
     }
-  } catch (e) {
+  } catch (e: any) {
     set(walletStore, {error: e, selected: undefined, connecting: false});
     throw e;
   }
@@ -1287,13 +1318,17 @@ function probeBuiltin() {
     try {
       const ethereum = await fetchEthereum();
       if (ethereum) {
+        const announced = !!$builtin.walletsAnnounced.find((v) => v.provider === ethereum);
+
         ethereum.autoRefreshOnNetworkChange = false;
         _builtinWeb3Provider = ethereum;
+
         set(builtinStore, {
           state: 'Ready',
           vendor: getVendor(ethereum),
           available: true,
           probing: false,
+          ethereumAnnounced: announced,
         });
       } else {
         set(builtinStore, {
@@ -1304,7 +1339,7 @@ function probeBuiltin() {
         });
       }
       resolve(ethereum);
-    } catch (e) {
+    } catch (e: any) {
       set(builtinStore, {
         error: e.message || e,
         vendor: undefined,
@@ -2028,7 +2063,7 @@ async function setupFallback(fallbackNodeOrProvider: string | Provider, chainCon
     let contractsInfos;
     try {
       contractsInfos = getContractInfos(chainConfigs, chainId);
-    } catch (error) {
+    } catch (error: any) {
       set(fallbackStore, {
         error,
         chainId,
@@ -2141,6 +2176,23 @@ export function initWeb3W<ContractTypes extends ContractsInfos = ContractsInfos>
   });
 
   if (isBrowser) {
+    if (typeof window !== 'undefined') {
+      // we prove announcing provider as soon as we can
+      (window as any).addEventListener('eip6963:announceProvider', (event: EIP6963AnnounceProviderEvent) => {
+        const walletsAnnounced = $builtin.walletsAnnounced;
+        const existing = walletsAnnounced.find(
+          (v) => v.info?.uuid === event.detail.info?.uuid || v.provider === event.detail.provider
+        );
+        if (existing && !existing.info) {
+          existing.info = event.detail.info;
+          set(builtinStore, {walletsAnnounced});
+        } else {
+          walletsAnnounced.push(event.detail);
+          set(builtinStore, {walletsAnnounced});
+        }
+      });
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+    }
     if (config.autoSelectPrevious) {
       const type = fetchPreviousSelection();
       if (type && type !== '') {

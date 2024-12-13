@@ -27,6 +27,8 @@ const $builtin = {
     available: undefined,
     error: undefined,
     vendor: undefined,
+    walletsAnnounced: [],
+    ethereumAnnounced: false,
 };
 const $balance = {
     state: 'Idle',
@@ -845,6 +847,17 @@ function select(type, moduleConfig) {
             _web3Provider = builtinWeb3Provider;
             _ethersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(builtinWeb3Provider), _observers);
         }
+        else if (typeof typeOrModule == 'string' && typeOrModule.startsWith('builtin:')) {
+            const splitted = typeof typeOrModule === 'string' && typeOrModule.split(':');
+            const uuid = splitted && splitted[1];
+            const wallet = $builtin.walletsAnnounced.find((v) => { var _a; return ((_a = v.info) === null || _a === void 0 ? void 0 : _a.uuid) === uuid; });
+            if (!wallet) {
+                const message = `No Builtin Wallet for ${typeOrModule}`;
+                throw new Error(message);
+            }
+            _web3Provider = wallet.provider;
+            _ethersProvider = ethers_1.proxyWeb3Provider(new providers_1.Web3Provider(_web3Provider), _observers);
+        }
         else {
             let module;
             if (typeof typeOrModule === 'string') {
@@ -990,6 +1003,7 @@ function probeBuiltin() {
         try {
             const ethereum = yield builtin_1.fetchEthereum();
             if (ethereum) {
+                const announced = !!$builtin.walletsAnnounced.find((v) => v.provider === ethereum);
                 ethereum.autoRefreshOnNetworkChange = false;
                 _builtinWeb3Provider = ethereum;
                 set(builtinStore, {
@@ -997,6 +1011,7 @@ function probeBuiltin() {
                     vendor: builtin_1.getVendor(ethereum),
                     available: true,
                     probing: false,
+                    ethereumAnnounced: announced,
                 });
             }
             else {
@@ -1817,6 +1832,22 @@ function initWeb3W(config) {
         state: 'Idle',
     });
     if (isBrowser) {
+        if (typeof window !== 'undefined') {
+            // we prove announcing provider as soon as we can
+            window.addEventListener('eip6963:announceProvider', (event) => {
+                const walletsAnnounced = $builtin.walletsAnnounced;
+                const existing = walletsAnnounced.find((v) => { var _a, _b; return ((_a = v.info) === null || _a === void 0 ? void 0 : _a.uuid) === ((_b = event.detail.info) === null || _b === void 0 ? void 0 : _b.uuid) || v.provider === event.detail.provider; });
+                if (existing && !existing.info) {
+                    existing.info = event.detail.info;
+                    set(builtinStore, { walletsAnnounced });
+                }
+                else {
+                    walletsAnnounced.push(event.detail);
+                    set(builtinStore, { walletsAnnounced });
+                }
+            });
+            window.dispatchEvent(new Event('eip6963:requestProvider'));
+        }
         if (config.autoSelectPrevious) {
             const type = fetchPreviousSelection();
             if (type && type !== '') {
