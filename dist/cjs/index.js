@@ -850,9 +850,15 @@ function select(type, moduleConfig) {
         else if (typeof typeOrModule == 'string' && typeOrModule.startsWith('builtin:')) {
             const splitted = typeof typeOrModule === 'string' && typeOrModule.split(':');
             const uuid = splitted && splitted[1];
-            const wallet = $builtin.walletsAnnounced.find((v) => { var _a; return ((_a = v.info) === null || _a === void 0 ? void 0 : _a.uuid) === uuid; });
+            const wallet = $builtin.walletsAnnounced.find((v) => { var _a; return ((_a = v.info) === null || _a === void 0 ? void 0 : _a.uuid) === uuid || v.info.name === uuid; });
             if (!wallet) {
                 const message = `No Builtin Wallet for ${typeOrModule}`;
+                set(walletStore, {
+                    error: { code: errors_1.MODULE_ERROR, message },
+                    selected: undefined,
+                    connecting: false,
+                    loadingModule: false,
+                });
                 throw new Error(message);
             }
             _web3Provider = wallet.provider;

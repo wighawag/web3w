@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.25
+
+### Patch Changes
+
+- fixes for rabby wallet
+
 ## 0.3.2-beta.24
 
 ### Patch Changes

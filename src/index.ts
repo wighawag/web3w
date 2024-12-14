@@ -485,7 +485,8 @@ async function switchChain(
       },
     ]);
   } catch (e: any) {
-    if (e.code === 4902) {
+    console.error(`could not switch to chain`, e);
+    if (e.code === 4902 || e.code === -32603) {
       if (config && config.rpcUrls && config.rpcUrls.length > 0) {
         try {
           await _ethersProvider.send('wallet_addEthereumChain', [
@@ -1172,9 +1173,16 @@ async function select(type: string, moduleConfig?: any) {
   } else if (typeof typeOrModule == 'string' && typeOrModule.startsWith('builtin:')) {
     const splitted = typeof typeOrModule === 'string' && typeOrModule.split(':');
     const uuid = splitted && splitted[1];
-    const wallet = $builtin.walletsAnnounced.find((v) => v.info?.uuid === uuid);
+    const wallet = $builtin.walletsAnnounced.find((v) => v.info?.uuid === uuid || v.info.name === uuid);
     if (!wallet) {
       const message = `No Builtin Wallet for ${typeOrModule}`;
+      set(walletStore, {
+        error: {code: MODULE_ERROR, message},
+        selected: undefined,
+        connecting: false,
+        loadingModule: false,
+      });
+
       throw new Error(message);
     }
     _web3Provider = wallet.provider;
