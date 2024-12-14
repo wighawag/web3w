@@ -1,5 +1,11 @@
 # web3w
 
+## 0.3.2-beta.24
+
+### Patch Changes
+
+- support EIP-6963
+
 ## 0.3.2-beta.23
 
 ### Patch Changes
