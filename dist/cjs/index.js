@@ -182,7 +182,8 @@ function switchChain(chainId, config) {
             ]);
         }
         catch (e) {
-            if (e.code === 4902) {
+            console.error(`could not switch to chain`, e);
+            if (e.code === 4902 || e.code === -32603) {
                 if (config && config.rpcUrls && config.rpcUrls.length > 0) {
                     try {
                         yield _ethersProvider.send('wallet_addEthereumChain', [
