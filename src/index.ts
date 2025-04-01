@@ -479,11 +479,16 @@ async function switchChain(
   }
   try {
     // attempt to switch...
-    await _ethersProvider.send('wallet_switchEthereumChain', [
+    const result = await _ethersProvider.send('wallet_switchEthereumChain', [
       {
         chainId: '0x' + parseInt(chainId).toString(16),
       },
     ]);
+    if (!result) {
+      return result;
+    } else {
+      throw result;
+    }
   } catch (e: any) {
     console.error(`could not switch to chain`, e);
     if (e.code === 4902 || e.code === -32603) {

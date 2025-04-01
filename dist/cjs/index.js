@@ -175,11 +175,17 @@ function switchChain(chainId, config) {
         }
         try {
             // attempt to switch...
-            yield _ethersProvider.send('wallet_switchEthereumChain', [
+            const result = yield _ethersProvider.send('wallet_switchEthereumChain', [
                 {
                     chainId: '0x' + parseInt(chainId).toString(16),
                 },
             ]);
+            if (!result) {
+                return result;
+            }
+            else {
+                throw result;
+            }
         }
         catch (e) {
             console.error(`could not switch to chain`, e);
